@@ -1,5 +1,5 @@
 # Unbounded knapsack solver (allowing for repetition of items)
-# Instead of using the solver superclass, this algorithm uses a greedy approach to get an initial solution and then iteratively improves it using an upper bound.
+# Instead of using the solver superclass, this algorithm uses a greedy approach and iteratively improves solutions using an upper bound.
 # This solver will not correctly handle negative values or weights.
 # Designed to run well on large knapsacks
 
@@ -14,14 +14,11 @@ class KnapsackSolver:
         items = [KnapsackItem(value, size) for value, size in zip(values, sizes)]
         items.sort(key=lambda item: item.value_ratio, reverse=True)
         knapsack = [ 0 for item in items ]
-        #Greedy initialization: fill with best value item
-        add_amount = knapsack_size // items[0].size
-        knapsack[0] = add_amount
-        total_value = add_amount * items[0].value
-        total_space = knapsack_size % items[0].size
-        best_value = total_value
+        total_value = 0
+        total_space = knapsack_size
+        best_value = 0
         best_knapsack = knapsack[:]
-        current_item = 1
+        current_item = 0
         while True:
             #Check upper bound
             if current_item >= len(items) or total_value + total_space * items[current_item].value_ratio < best_value:
