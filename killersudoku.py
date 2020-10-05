@@ -3,7 +3,7 @@ from math import sqrt
 
 class KillerSudokuSolver(GridSolver):
     def solve(self, puzzle):
-        unknown, regions, grid_values = puzzle.split(";")
+        _, regions, grid_values = puzzle.split(";")
         width = height = int(sqrt(len(regions.split(","))))
         state = NumberGridState([[0 for x in range(width)] for y in range(height)], 0, 0)
         self.decode_regions(regions, width, height)
@@ -45,4 +45,4 @@ puzzle_easy = 'zzzc;1,1,2,2,3,4,4,5,6,7,8,9,9,3,10,11,5,6,7,8,12,13,13,10,11,14,
 puzzle_hard = 'zzzc;1,2,2,3,3,4,5,6,7,1,8,9,9,10,4,5,6,7,11,8,12,12,10,13,14,14,7,11,15,16,16,13,13,17,18,18,19,15,20,21,22,22,17,23,18,19,15,20,21,24,25,26,23,27,19,28,20,29,24,25,26,23,27,28,28,28,29,30,30,31,32,32,33,33,29,29,34,34,31,32,32;9_10a13a6_12_5_13a9_15a14d6a11b16_15c15_12c5_15a21a11_6_7b16e10_14_10a11a12a21i10a12_21a15c7d'
 #ID: 2867419
 
-KillerSudokuSolver().solve(puzzle_hard)
+KillerSudokuSolver().solve(puzzle_easy)
