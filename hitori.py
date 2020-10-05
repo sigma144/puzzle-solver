@@ -58,28 +58,47 @@ class HitoriSolver(GridSolver):
         if y == 0:
             return True
         if y == len(state.grid) - 1:
-            if x > 0 and state.grid[y-1][x-1] == -1 and not self.check_flow(state, x-1, y) or \
-                x < len(state.grid[0]) - 1 and state.grid[y-1][x+1] == -1 and not self.check_flow(state, x, y-1):
+            if x > 0 and state.grid[y-1][x-1] == -1 and not self.check_boundary(state, x, y-1) or \
+                x < len(state.grid[0]) - 1 and state.grid[y-1][x+1] == -1 and not self.check_boundary(state, x, y-1):
                 return False
-        if (x == 0 or state.grid[y-1][x-1] == -1) and (x == len(state.grid[0]) - 1 or state.grid[y-1][x+1] == -1) and not self.check_flow(state, x, y-1):
+        elif (x == 0 or state.grid[y-1][x-1] == -1) and (x == len(state.grid[0]) - 1 or state.grid[y-1][x+1] == -1) and not self.check_boundary(state, x, y-1):
             return False
         return True
-    def check_flow(self, state, x, y):
-        state = HitoriState(state.grid, state.x, state.y)
-        state.grid[state.y][state.x] = -1
-        if state.x == len(state.grid[0]) and state.y == len(state.grid):
-            state.grid[state.y - 1][state.x] = 0
-        return self.check_flow_r(state, x, y)
-    def check_flow_r(self, state, x, y):
-        if not self.on_grid(state, x, y) or state.grid[y][x] == -1:
+    def check_boundary(self, state, x, y):
+        if (x == 0 or state.grid[y][x-1] == -1) and (x == len(state.grid[0]) - 1 or state.grid[y][x+1] == -1) and (y == 0 or state.grid[y-1][x] == -1):
             return False
-        if state.grid[y][x] == 0:
-            return True
-        state.grid[y][x] = -1
-        for dir in DIRECTIONS:
-            if self.check_flow_r(state, x + dir[0], y + dir[1]):
-                return True
+        #Flow right
+        if x < len(state.grid[0]) - 1:
+            destx, desty = (x+1, y+1) if state.grid[y][x+1] == -1 else (x-1, y+1)
+            result = self.flow_boundary(state, x, y, destx, desty, False)
+            if result != None:
+                return result
+        #Flow left
+        if x > 0:
+            destx, desty = (x-1, y+1) if state.grid[y][x-1] == -1 else (x+1, y+1)
+            result = self.flow_boundary(state, x, y, destx, desty, True)
+            if result != None:
+                return result
         return False
+
+    def flow_boundary(self, state, startx, starty, destx, desty, flow_left):
+        dir = 2 if flow_left else 0
+        x, y = startx, starty
+        rot1 = 1 if flow_left else 3
+        rot2 = 3 if flow_left else 1
+        while True:
+            dx, dy = x + DIRECTIONS[dir][0], y + DIRECTIONS[dir][1]
+            if not self.on_grid(state, dx, dy):
+                return None
+            elif state.grid[dy][dx] == -1 or dx == startx and dy == starty + 1:
+                dir = (dir + rot1) % 4
+            elif dx == destx and dy == desty:
+                return True
+            elif dx == startx and dy == starty:
+                return False
+            else:
+                x, y = dx, dy
+                dir = (dir + rot2) % 4
 
 puzzle_easy = '17a392527892774a76898741379a72a4a9a68a5a238961a493486a74241441187379763794a51523a996323537aa5a186848'
 #Hard 10x10 - ID: 4048768
