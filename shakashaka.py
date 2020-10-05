@@ -60,18 +60,6 @@ class ShakashakaSolver(GridSolver):
                 states.append(new_state)
         return states
     def can_place(self, state, x, y, move):
-        if move == RECT:
-            if y > 0 and x < state.width - 1 and state.grid[y-1][x] == RECT and state.grid[y-1][x+1] == RECT and state.grid[y][x+1] != 0:
-                return False
-            total = 0
-            if x > 0 and state.grid[y][x-1] == RECT:
-                total += 1
-            if y > 0 and state.grid[y-1][x] == RECT:
-                total += 1
-            if x > 0 and y > 0 and state.grid[y-1][x-1] == RECT:
-                total += 1
-            if total == 2:
-                return False
         if move == DIAMOND:
             if state.corners[y][x] == 1 and state.corners[y][x+1] == 1 or state.corners[y][x+1] == 1 and state.corners[y+1][x+1] == 1 or \
                 state.corners[y+1][x] == 1 and state.corners[y+1][x+1] == 1 or state.corners[y][x] == 1 and state.corners[y+1][x] == 1:
@@ -84,7 +72,18 @@ class ShakashakaSolver(GridSolver):
             if state.corners[y][x] and CORNERS[move][UP_LEFT] != state.corners[y][x] or state.corners[y][x+1] and CORNERS[move][UP_RIGHT] != state.corners[y][x+1] or \
                 state.corners[y+1][x] and CORNERS[move][DOWN_LEFT] != state.corners[y+1][x] or state.corners[y+1][x+1] and CORNERS[move][DOWN_RIGHT] != state.corners[y+1][x+1]:
                 return False
-        #Check triangle counts
+        if move == RECT:
+            if y > 0 and x < state.width - 1 and state.grid[y-1][x] == RECT and state.grid[y-1][x+1] == RECT and state.grid[y][x+1] != 0:
+                return False
+            total = 0
+            if x > 0 and state.grid[y][x-1] == RECT:
+                total += 1
+            if y > 0 and state.grid[y-1][x] == RECT:
+                total += 1
+            if x > 0 and y > 0 and state.grid[y-1][x-1] == RECT:
+                total += 1
+            if total == 2:
+                return False
         for dir in DIRECTIONS:
             if self.on_grid(state, y + dir[1], x + dir[0]) and not self.check_triangle_count(state, x + dir[0], y + dir[1], move in [UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT]):
                 return False
