@@ -9,18 +9,7 @@ class WolvesChicksState:
         self.last_move = last_move
         self.raft_location = raft_location
     def __repr__(self):
-        string = ""
-        for animal in range(self.chicks1):
-            string += "C"
-        for animal in range(self.wolves1):
-            string += "W"
-        string += " " + self.last_move + " "
-        for animal in range(self.chicks2):
-            string += "C"
-        for animal in range(self.wolves2):
-            string += "W"
-        string += "\n"
-        return string
+        return 'C'*self.chicks1 + 'W'*self.wolves1 + ' ' + self.last_move + ' ' + 'C'*self.chicks2 + 'W'*self.wolves2 + '\n'
     def __hash__(self):
         return hash((self.chicks1, self.wolves1, self.chicks2, self.wolves2, self.raft_location))
     def __eq__(self, other):
