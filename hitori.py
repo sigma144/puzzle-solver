@@ -65,15 +65,14 @@ class HitoriSolver(GridSolver):
     def check_boundary(self, state, x, y):
         if (x == 0 or state.grid[y][x-1] == -1) and (x == len(state.grid[0]) - 1 or state.grid[y][x+1] == -1) and (y == 0 or state.grid[y-1][x] == -1):
             return False
+        destx, desty = (x+1, y+1) if x < len(state.grid[0]) - 1 and state.grid[y][x+1] == -1 else (x-1, y+1)
         #Flow right
         if x < len(state.grid[0]) - 1:
-            destx, desty = (x+1, y+1) if state.grid[y][x+1] == -1 else (x-1, y+1)
             result = self.flow_boundary(state, x, y, destx, desty, False)
             if result != None:
                 return result
         #Flow left
         if x > 0:
-            destx, desty = (x-1, y+1) if state.grid[y][x-1] == -1 else (x+1, y+1)
             result = self.flow_boundary(state, x, y, destx, desty, True)
             if result != None:
                 return result
