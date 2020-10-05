@@ -21,22 +21,20 @@ class HitoriSolver(GridSolver):
         width = height = int(sqrt(len(board)))
         starting_state = HitoriState([[0 for x in range(width)] for y in range(height)], 0, 0)
         starting_state.width, starting_state.height = width, height
-        starting_state.numbers = [[ord(board[y * width + x]) - ord('0') if board[y * width + x] < 'a' else ord(board[y * width + x]) - ord('a') + 10 for x in range(width)] for y in range(height)]
+        self.numbers = [[ord(board[y * width + x]) - ord('0') if board[y * width + x] < 'a' else ord(board[y * width + x]) - ord('a') + 10 for x in range(width)] for y in range(height)]
         self.solve_recursive(starting_state)
     def get_next_states(self, state):
         states = []
         if self.can_place_num(state, state.x, state.y):
             new_state = HitoriState(state.grid, state.x, state.y)
-            new_state.numbers = state.numbers
-            new_state.grid[state.y][state.x] = state.numbers[state.y][state.x]
+            new_state.grid[state.y][state.x] = self.numbers[state.y][state.x]
             states.append(new_state)
         if self.can_place_space(state, state.x, state.y):
             new_state = HitoriState(state.grid, state.x, state.y)
-            new_state.numbers = state.numbers
             if state.x < len(state.grid[0]) - 1:
-                new_state.grid[state.y][state.x + 1] = state.numbers[state.y][state.x + 1]
+                new_state.grid[state.y][state.x + 1] = self.numbers[state.y][state.x + 1]
             if state.y < len(state.grid) - 1:
-                new_state.grid[state.y + 1][state.x] = state.numbers[state.y + 1][state.x]
+                new_state.grid[state.y + 1][state.x] = self.numbers[state.y + 1][state.x]
             new_state.grid[state.y][state.x] = -1
             states.append(new_state)
         return states
@@ -44,7 +42,7 @@ class HitoriSolver(GridSolver):
         if state.grid[y][x]:
             return True
         #Check row
-        num = state.numbers[y][x]
+        num = self.numbers[y][x]
         if num in state.grid[y]:
             return False
         #Check column
