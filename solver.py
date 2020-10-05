@@ -101,7 +101,7 @@ class BinaryGridState:
         string = ""
         for row in self.grid:
             for char in row:
-               string += "0" if char == 1 else "-" 
+               string += "0" if char == 1 else '-' if char == -1 else "." 
             string += "\n"
         return string
 
@@ -157,6 +157,35 @@ class GridSolver:
         for s in next:
             if self.check_state(s):
                 result = self._solve_recursive(s)
+                if result:
+                    return result
+        return None
+
+    def solve_recursive_debug(self, starting_state): #State must have "grid", "x", and "y" variables
+        starting_state.x = starting_state.y = 0
+        state = self._solve_recursive_debug(starting_state)
+        if state == None:
+            print("No solution exists.")
+        else:
+            print(state)
+
+    def _solve_recursive_debug(self, state):
+        while state.grid[state.y][state.x] != 0:
+            state.x += 1
+            if state.x >= len(state.grid[state.y]):
+                state.x = 0
+                state.y += 1
+                if state.y >= len(state.grid):
+                    return state if self.check_finish(state) else None
+        next = self.get_next_states(state)
+        if len(next) == 0:
+            print("Invalid state found.")
+            print(state)
+            print(state.x, state.y)
+            input()
+        for s in next:
+            if self.check_state(s):
+                result = self._solve_recursive_debug(s)
                 if result:
                     return result
         return None
