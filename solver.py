@@ -1,4 +1,5 @@
 from math import sqrt
+import time
 
 class Solver:
     def solve_optimal(self, starting_state): #Implement __hash__ and __eq__ for states
@@ -30,11 +31,15 @@ class Solver:
         print("No solution exists.")
 
     def solve_recursive(self, starting_state):
+        print("Solving...")
+        start_time = time.time()
         state = self._solve_recursive(starting_state)
+        elapsed = time.time() - start_time
         if state == None:
             print("No solution exists.")
         else:
             print(state)
+        print("Solved in {:.2f} seconds".format(elapsed))
 
     def _solve_recursive(self, state): #Helper function
         next = self.get_next_states(state)
@@ -129,12 +134,16 @@ class GridSolver:
     #Solving functions
 
     def solve_recursive(self, starting_state): #State must have "grid", "x", and "y" variables
+        print("Solving...")
+        start_time = time.time()
         starting_state.x = starting_state.y = 0
         state = self._solve_recursive(starting_state)
+        elapsed = time.time() - start_time
         if state == None:
             print("No solution exists.")
         else:
             print(state)
+        print("Solved in {:.2f} seconds".format(elapsed))
 
     def _solve_recursive(self, state):
         while state.grid[state.y][state.x] != 0:
@@ -297,4 +306,4 @@ WALL_LEFT = 8
 
 DIRECTIONS = [(1, 0), (0, 1), (-1, 0), (0, -1)]
 DIRECTIONS8 = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
-DIRECTIONS8_HALF = [(-1, 0), (-1, -1), (0, -1), (1, -1), ]
+DIRECTIONS8_HALF = [(-1, 0), (-1, -1), (0, -1), (1, -1)]
