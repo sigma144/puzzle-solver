@@ -16,7 +16,6 @@ class SudokuState:
 
 class SudokuSolver(GridSolver):
     def solve(self, board):
-        self.finished = False
         array = []
         for row in board:
             array.append([])
