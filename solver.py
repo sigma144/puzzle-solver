@@ -42,14 +42,18 @@ class Solver:
         print("Solved in {:.2f} seconds".format(elapsed))
 
     def _solve_recursive(self, state): #Helper function
-        next = self.get_next_states(state)
+        result = self.iterate_state(state)
+        while result == True:
+            result = self.iterate_state(state)
+        if result == None or not self.check_state(state):
+            return None
         if self.check_finish(state):
             return state
+        next = self.get_next_states(state)
         for s in next:
-            if self.check_state(s):
-                result = self._solve_recursive(s)
-                if result:
-                    return result
+            result = self._solve_recursive(s)
+            if result:
+                return result
         return None
 
     def solve_iterative(self, starting_state):
@@ -79,6 +83,11 @@ class Solver:
 
     def check_finish(self, state):
         return True
+
+    def iterate_state(self, state):
+        return False #State did not change
+        #return True: State changed
+        #return None: State is invalid
 
     #Iterative solving functions
 
@@ -131,6 +140,11 @@ class GridSolver:
     def check_finish(self, state):
         return True
 
+    def iterate_state(self, state):
+        return False #State did not change
+        #return True: State changed
+        #return None: State is invalid
+
     #Solving functions
 
     def solve_recursive(self, starting_state): #State must have "grid", "x", and "y" variables
@@ -146,6 +160,11 @@ class GridSolver:
         print("Solved in {:.2f} seconds".format(elapsed))
 
     def _solve_recursive(self, state):
+        result = self.iterate_state(state)
+        while result == True:
+            result = self.iterate_state(state)
+        if result == None or not self.check_state(state):
+            return None
         while state.grid[state.y][state.x] != 0:
             state.x += 1
             if state.x >= len(state.grid[state.y]):
@@ -155,10 +174,9 @@ class GridSolver:
                     return state if self.check_finish(state) else None
         next = self.get_next_states(state)
         for s in next:
-            if self.check_state(s):
-                result = self._solve_recursive(s)
-                if result:
-                    return result
+            result = self._solve_recursive(s)
+            if result:
+                return result
         return None
 
     def solve_recursive_debug(self, starting_state): #State must have "grid", "x", and "y" variables
@@ -170,6 +188,15 @@ class GridSolver:
             print(state)
 
     def _solve_recursive_debug(self, state):
+        result = self.iterate_state(state)
+        while result == True:
+            result = self.iterate_state(state)
+        if result == None or not self.check_state(state):
+            print("Invalid state found.")
+            print(state)
+            print(state.x, state.y)
+            input()
+            return None
         while state.grid[state.y][state.x] != 0:
             state.x += 1
             if state.x >= len(state.grid[state.y]):
@@ -184,10 +211,9 @@ class GridSolver:
             print(state.x, state.y)
             input()
         for s in next:
-            if self.check_state(s):
-                result = self._solve_recursive_debug(s)
-                if result:
-                    return result
+            result = self._solve_recursive_debug(s)
+            if result:
+                return result
         return None
 
     #Reverse version, in case it is faster
@@ -202,6 +228,11 @@ class GridSolver:
             print(state)
 
     def _solve_recursive_r(self, state):
+        result = self.iterate_state(state)
+        while result == True:
+            result = self.iterate_state(state)
+        if result == None or not self.check_state(state):
+            return None
         while state.grid[state.y][state.x] != 0:
             state.x -= 1
             if state.x < 0:
@@ -211,10 +242,9 @@ class GridSolver:
                     return state if self.check_finish(state) else None
         next = self.get_next_states(state)
         for s in next:
-            if self.check_state(s):
-                result = self._solve_recursive_r(s)
-                if result:
-                    return result
+            result = self._solve_recursive_r(s)
+            if result:
+                return result
         return None
 
     #Helper functions
@@ -316,7 +346,7 @@ class GridSolver:
         return y >= 0 and y < len(state.grid) and x >= 0 and x < len(state.grid[y])
 
     def rows(self, state):
-        return state.grid
+        return [row[:] for row in state.grid]
 
     def columns(self, state):
         return [[row[x] for row in state.grid] for x in range(len(state.grid[0]))]
