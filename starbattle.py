@@ -38,7 +38,7 @@ class StarBattleSolver(GridSolver):
             for X, Y in self.get_region_points(x, y):
                 if state.grid[Y][X] == 0:
                     state.grid[Y][X] = -1
-
+'''
     def iterate_state(self, state):
         updated = False
         for y,row in enumerate(self.rows(state)):
@@ -88,7 +88,7 @@ class StarBattleSolver(GridSolver):
                         updated = True
 
         return updated
-
+'''
 puzzle_easy = '1,1,2,2,2,1,1,1,2,2,3,1,1,2,4,3,3,3,5,4,3,3,3,5,5'
 #1 star - ID: 8462991
 

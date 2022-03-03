@@ -105,7 +105,8 @@ class BinaryGridState:
         self.grid = [row[:] for row in grid]
         self.x = x
         self.y = y
-
+        self.width = len(self.grid[0])
+        self.height = len(self.grid)
     def __repr__(self):
         string = ""
         for row in self.grid:
@@ -113,13 +114,16 @@ class BinaryGridState:
                string += "0" if char == 1 else '-' if char == -1 else "." 
             string += "\n"
         return string
+    def on_grid(self, x, y):
+        return x >= 0 and y >= 0 and x < len(self.grid[0]) and y < len(self.grid)
 
 class NumberGridState:
     def __init__(self, grid, x, y):
         self.grid = [row[:] for row in grid]
         self.x = x
         self.y = y
-
+        self.width = len(self.grid[0])
+        self.height = len(self.grid)
     def __repr__(self):
         string = ""
         for row in self.grid:
@@ -127,6 +131,8 @@ class NumberGridState:
                string += chr(char - 10 + ord('A')) if char > 9 else str(char) if char > 0 else "-" 
             string += "\n"
         return string
+    def on_grid(self, x, y):
+        return x >= 0 and y >= 0 and x < len(self.grid[0]) and y < len(self.grid)
 
 class GridSolver:
 
@@ -141,14 +147,38 @@ class GridSolver:
         return True
 
     def iterate_state(self, state):
+        #return self.iterate_valid_placements(state)
         return False #State did not change
-        #return True: State changed
+        #return some_state: State changed
         #return None: State is invalid
+
+    def iterate_valid_placements(self, state):
+        backstate, backx, backy = state, state.x, state.y
+        changed = False
+        while True:
+            if state.grid[state.y][state.x] == 0:
+                next = self.get_next_states(state)
+                if len(next) == 0:
+                    backstate.x, backstate.y = backx, backy
+                    return None
+                if len(next) == 1:
+                    state = next[0]
+                    changed = True
+            state.x += 1
+            if state.x >= len(state.grid[state.y]):
+                state.x = 0
+                state.y += 1
+                if state.y >= len(state.grid):
+                    state.x, state.y = backx, backy
+                    backstate.x, backstate.y = backx, backy
+                    if changed == False: return False
+                    return state
 
     #Solving functions
 
     def solve_recursive(self, starting_state): #State must have "grid", "x", and "y" variables
         print("Solving...")
+        self.count_recurse = -1; self.count_iterate = 0
         start_time = time.time()
         starting_state.x = starting_state.y = 0
         state = self._solve_recursive(starting_state)
@@ -158,10 +188,14 @@ class GridSolver:
         else:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
+        print(f"{self.count_recurse} recursions, {self.count_iterate} iterations.")
 
     def _solve_recursive(self, state):
+        self.count_recurse += 1
         result = self.iterate_state(state)
-        while result == True:
+        while result:
+            self.count_iterate += 1
+            state = result
             result = self.iterate_state(state)
         if result == None or not self.check_state(state):
             return None
@@ -186,6 +220,7 @@ class GridSolver:
             print("No solution exists.")
         else:
             print(state)
+        print("Solved!")
 
     def _solve_recursive_debug(self, state):
         result = self.iterate_state(state)
@@ -194,7 +229,6 @@ class GridSolver:
         if result == None or not self.check_state(state):
             print("Invalid state found.")
             print(state)
-            print(state.x, state.y)
             input()
             return None
         while state.grid[state.y][state.x] != 0:
@@ -341,9 +375,6 @@ class GridSolver:
                 position += 1
             else:
                 position += ord(char) - ord('a') + 1
-
-    def on_grid(self, state, x, y):
-        return y >= 0 and y < len(state.grid) and x >= 0 and x < len(state.grid[y])
 
     def rows(self, state):
         return [row[:] for row in state.grid]
