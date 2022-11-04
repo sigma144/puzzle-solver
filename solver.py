@@ -7,19 +7,65 @@ class Solver:
         self.state_queue = []
         starting_state.previous = None
         self.state_queue = [starting_state]
+        count_iterate = 0
+        print("Solving...")
+        start_time = time.time()
         while len(self.state_queue) > 0:
+            count_iterate += 1
             state = self.state_queue.pop(0)
             next = self.get_next_states(state)
             for s in next:
                 s.previous = state
                 if self.check_finish(s):
+                    elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
                     move_list = [s]
                     while s.previous != None:
                         move_list.insert(0, s.previous)
                         s = s.previous
                     for move in move_list:
-                        print(move, end = " ")
+                        print(move)
+                    print("Solved in", len(move_list)-1, "moves!")
+                    print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+                    return
+            for s in next:
+                if not s in self.prev_states and self.check_state(s):
+                    if len(self.state_queue) > 500000:
+                        print("State queue max size exceeded, cannot solve.")
+                        return
+                    self.state_queue.append(s)
+                    self.prev_states.add(s)
+        print("No solution exists.")
+        elapsed = time.time() - start_time
+        print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+
+    def solve_optimal_debug(self, starting_state): #Implement __hash__ and __eq__ for states
+        self.prev_states = set()
+        self.state_queue = []
+        starting_state.previous = None
+        self.state_queue = [starting_state]
+        count_iterate = 0
+        print("Solving...")
+        start_time = time.time()
+        while len(self.state_queue) > 0:
+            print("QUEUE SIZE:", len(self.state_queue))
+            state = self.state_queue.pop(0)
+            print(state)
+            input()
+            next = self.get_next_states(state)
+            for s in next:
+                s.previous = state
+                if self.check_finish(s):
+                    elapsed = time.time() - start_time
+                    #Done solving, print linked list of moves
+                    move_list = [s]
+                    while s.previous != None:
+                        move_list.insert(0, s.previous)
+                        s = s.previous
+                    for move in move_list:
+                        print(move)
+                    print("Solved in", len(move_list)-1, "moves!")
+                    print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return
             for s in next:
                 if not s in self.prev_states and self.check_state(s):
@@ -29,8 +75,11 @@ class Solver:
                     self.state_queue.append(s)
                     self.prev_states.add(s)
         print("No solution exists.")
+        elapsed = time.time() - start_time
+        print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
 
-    def solve_recursive(self, starting_state):
+    def solve_recursive(self, starting_state, depth=0):
+        self.depth = depth
         print("Solving...")
         start_time = time.time()
         state = self._solve_recursive(starting_state)
@@ -42,9 +91,9 @@ class Solver:
         print("Solved in {:.2f} seconds".format(elapsed))
 
     def _solve_recursive(self, state): #Helper function
-        result = self.iterate_state(state)
+        result = self.iterate_state(state, depth=self.depth)
         while result == True:
-            result = self.iterate_state(state)
+            result = self.iterate_state(state, depth=self.depth)
         if result == None or not self.check_state(state):
             return None
         if self.check_finish(state):
@@ -55,23 +104,6 @@ class Solver:
             if result:
                 return result
         return None
-
-    def solve_iterative(self, starting_state):
-        last_state = starting_state
-        state = last_state
-        while True:
-            state = self.next_state(state)
-            if state == None:
-                state = self.prev_level(last_state)
-                if state == None:
-                    print("No solution exists.")
-                    return
-            else:
-                state = self.next_level(state)
-                if state == None:
-                    print(last_state)
-                    return
-                last_state = state
 
     #Recursive/optimal solving functions
 
@@ -84,21 +116,10 @@ class Solver:
     def check_finish(self, state):
         return True
 
-    def iterate_state(self, state):
+    def iterate_state(self, state, depth):
         return False #State did not change
         #return True: State changed
         #return None: State is invalid
-
-    #Iterative solving functions
-
-    def next_state(self, state):
-        return state
-
-    def next_level(self, state):
-        return state
-
-    def prev_level(self, state):
-        return state
 
 class BinaryGridState:
     def __init__(self, grid, x, y):
@@ -147,58 +168,183 @@ class GridSolver:
         return True
 
     def iterate_state(self, state):
-        #return self.iterate_valid_placements(state)
         return False #State did not change
-        #return some_state: State changed
+        #return True: State changed
         #return None: State is invalid
-
-    def iterate_valid_placements(self, state):
-        backstate, backx, backy = state, state.x, state.y
-        changed = False
-        while True:
-            if state.grid[state.y][state.x] == 0:
-                next = self.get_next_states(state)
-                if len(next) == 0:
-                    backstate.x, backstate.y = backx, backy
-                    return None
-                if len(next) == 1:
-                    state = next[0]
-                    changed = True
-            state.x += 1
-            if state.x >= len(state.grid[state.y]):
-                state.x = 0
-                state.y += 1
-                if state.y >= len(state.grid):
-                    state.x, state.y = backx, backy
-                    backstate.x, backstate.y = backx, backy
-                    if changed == False: return False
-                    return state
 
     #Solving functions
 
-    def solve_recursive(self, starting_state): #State must have "grid", "x", and "y" variables
+    def solve_iterative(self, start_state, depth=100):
         print("Solving...")
-        self.count_recurse = -1; self.count_iterate = 0
+        self.count_iterate = 0
+        self.solution = None
         start_time = time.time()
-        starting_state.x = starting_state.y = 0
-        state = self._solve_recursive(starting_state)
+        start_state.x = start_state.y = 0
+        state = self._solve_iterative(start_state, depth)
         elapsed = time.time() - start_time
         if state == None:
             print("No solution exists.")
         else:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
-        print(f"{self.count_recurse} recursions, {self.count_iterate} iterations.")
+        print(f"{self.count_iterate} iterations.")
 
-    def _solve_recursive(self, state):
-        self.count_recurse += 1
+    def _solve_iterative(self, state, max_depth):
+        state.x = state.y = 0
         result = self.iterate_state(state)
         while result:
             self.count_iterate += 1
-            state = result
             result = self.iterate_state(state)
-        if result == None or not self.check_state(state):
-            return None
+        depth = 0
+        open_space = False
+        while not self.solution:
+            if state.grid[state.y][state.x] == 0:
+                self.count_iterate += 1
+                result = self.iterate_state(state)
+                while result:
+                    state.x = state.y = 0
+                    open_space = False
+                    result = self.iterate_state(state)
+                next = self.get_next_states(state)
+                if len(next) == 1:
+                    state = next[0]
+                    state.x = state.y = 0
+                    open_space = False
+                    continue
+                elif len(next) == 0:
+                    return None
+                else:
+                    open_space = True
+                if depth >= 1:
+                    #Bifurcate
+                    nextSol = None
+                    for s in next:
+                        result = self._solve_iterative(s, depth-1)
+                        if result:
+                            if nextSol:
+                                open_space = True
+                                break
+                            nextSol = s
+                    else:
+                        if nextSol == None:
+                            return None
+                        self.count_iterate += 1
+                        open_space = False
+                        state = nextSol
+                        state.x = state.y = 0
+                        depth = 0
+            state.x += 1
+            if state.x >= len(state.grid[state.y]):
+                state.x = 0
+                state.y += 1
+            if state.x == 0 and state.y >= len(state.grid):
+                if not open_space:
+                    self.solution = state
+                    return state
+                if depth == max_depth:
+                    return state
+                depth += 1
+                state.x = state.y = 0
+        return self.solution
+
+    def _solve_iterative_debug(self, state, max_depth):
+        state.x = state.y = 0
+        result = self.iterate_state(state)
+        while result:
+            print(state)
+            input("Place! Logic 1A.")
+            self.count_iterate += 1
+            result = self.iterate_state(state)
+        depth = 0
+        open_space = False
+        while not self.solution:
+            if state.grid[state.y][state.x] == 0:
+                self.count_iterate += 1
+                result = self.iterate_state(state)
+                while result:
+                    print(state)
+                    input("Place! Using iteration.")
+                    state.x = state.y = 0
+                    open_space = False
+                    result = self.iterate_state(state)
+                next = self.get_next_states(state)
+                if len(next) == 1:
+                    state = next[0]
+                    print(state)
+                    input("Place! Only valid move.")
+                    state.x = state.y = 0
+                    open_space = False
+                    continue
+                elif len(next) == 0:
+                    print(state)
+                    input(f"Invalid state! ({state.x} {state.y})")
+                    return None
+                else:
+                    open_space = True
+                if depth >= 1:
+                    #Bifurcate
+                    print(f"Bifurcate {depth}, ({state.x}, {state.y}), [{state.nums[state.y][state.x]}]")
+                    nextSol = None
+                    for s in next:
+                        result = self._solve_iterative_debug(s, depth-1)
+                        print(result != None)
+                        if result:
+                            if nextSol:
+                                open_space = True
+                                print("Inconclusive.")
+                                break
+                            nextSol = s
+                    else:
+                        if nextSol == None:
+                            input(f"Invalid state! {state.x} {state.y}")
+                            return None
+                        self.count_iterate += 1
+                        open_space = False
+                        print(nextSol)
+                        input(f"Place! Depth={depth}")
+                        state = nextSol
+                        state.x = state.y = 0
+                        depth = 0
+            state.x += 1
+            if state.x >= len(state.grid[state.y]):
+                state.x = 0
+                state.y += 1
+            if state.x == 0 and state.y >= len(state.grid):
+                if not open_space:
+                    self.solution = state
+                    input("Solved!")
+                    return state
+                if depth == max_depth:
+                    print("Max Depth Eceeded!!!!")
+                    return state
+                depth += 1
+                state.x = state.y = 0
+        return self.solution
+
+    def solve_recursive(self, starting_state, depth=0): #State must have "grid", "x", and "y" variables
+        print("Solving...")
+        self.count_recurse = -1; self.count_iterate = 0
+        start_time = time.time()
+        starting_state.x = starting_state.y = 0
+        state = self._solve_recursive(starting_state, depth)
+        elapsed = time.time() - start_time
+        if state == None:
+            print("No solution exists.")
+        else:
+            print(state)
+        print("Solved in {:.2f} seconds".format(elapsed))
+        print(f"{self.count_recurse} recursions.")
+
+    def _solve_recursive(self, state, depth):
+        self.count_recurse += 1
+        #result = self.iterate_state(state)
+        #while result:
+        #    self.count_iterate += 1
+        #    result = self.iterate_state(state)
+        if depth > 0:
+            result = self._iterate_valid_placements(state, depth)
+            if result != False: state = result
+        if state == None: return None
         while state.grid[state.y][state.x] != 0:
             state.x += 1
             if state.x >= len(state.grid[state.y]):
@@ -208,7 +354,7 @@ class GridSolver:
                     return state if self.check_finish(state) else None
         next = self.get_next_states(state)
         for s in next:
-            result = self._solve_recursive(s)
+            result = self._solve_recursive(s, depth)
             if result:
                 return result
         return None

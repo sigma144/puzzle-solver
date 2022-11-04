@@ -28,8 +28,6 @@ class SudokuSolver(GridSolver):
                 if state.grid[y // 3 * 3 + Y][x // 3 * 3 + X] == num:
                     return False
         return True
-    def iterate_state(self, state):
-        return self.iterate_valid_placements(state)
     
 board_easy = [
         "8769-----",
