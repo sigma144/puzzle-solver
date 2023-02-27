@@ -2,7 +2,7 @@ from math import sqrt
 import time
 
 class Solver:
-    def solve_optimal(self, starting_state): #Implement __hash__ and __eq__ for states
+    def solve_optimal(self, starting_state, prnt=True): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
         self.state_queue = []
         starting_state.previous = None
@@ -20,24 +20,26 @@ class Solver:
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
                     move_list = [s]
-                    while s.previous != None:
+                    while s.previous is not None:
                         move_list.insert(0, s.previous)
                         s = s.previous
-                    for move in move_list:
-                        print(move)
+                    if prnt:
+                        for move in move_list:
+                            print(move)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-                    return
+                    return move_list
             for s in next:
                 if not s in self.prev_states and self.check_state(s):
-                    if len(self.state_queue) > 500000:
-                        print("State queue max size exceeded, cannot solve.")
-                        return
+                    #if len(self.state_queue) > 10000000:
+                    #    print("State queue max size exceeded, cannot solve.")
+                    #    return
                     self.state_queue.append(s)
                     self.prev_states.add(s)
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+        return []
 
     def solve_optimal_debug(self, starting_state): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
@@ -59,24 +61,25 @@ class Solver:
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
                     move_list = [s]
-                    while s.previous != None:
+                    while s.previous is not None:
                         move_list.insert(0, s.previous)
                         s = s.previous
                     for move in move_list:
                         print(move)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-                    return
+                    return move_list
             for s in next:
                 if not s in self.prev_states and self.check_state(s):
                     if len(self.state_queue) > 10000:
                         print("State queue max size exceeded, cannot solve.")
-                        return
+                        return []
                     self.state_queue.append(s)
                     self.prev_states.add(s)
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+        return []
 
     def solve_recursive(self, starting_state, depth=0):
         self.depth = depth
