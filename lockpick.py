@@ -6,6 +6,7 @@ class LockpickState:
         self.access = set(access)
         self.stock = dict(stock)
         self.edges = [(v1, v2[:], v3) for v1, v2, v3 in edges]
+        self.master = False
     def __eq__(self, state):
         if self.stock != state.stock:
             return False
@@ -50,12 +51,15 @@ class LockpickState:
                     stock[lock[0]] = 0
                 stock[lock[0]] += int(lock[1:])
         else:
+            if stock.get('n', 0) > 0 and lock[0] != 'U':
+                lock = 'N'+lock[1:]
             if master:
                 if lock[0] == 'M' or lock[0] == 'U':
                     return None
                 stock['m'] -= 1
                 if stock['m'] == 0:
                     del stock['m']
+                state.master = True
             elif lock[1] == 'x':
                 if stock.get(lock[0].lower(), 0) == 0:
                     return None
@@ -113,7 +117,6 @@ class LockpickSolver(Solver):
     def solve(self, state):
         self.start = 0
         self.end = max([e[2] for e in state.edges if e[2]])
-        self.num_edges = max([len(e[1]) for e in state.edges])
         #moves = self.solve_optimal_debug(state)
         moves = self.solve_optimal(state, prnt=False)
         for i, m in enumerate(moves):
@@ -129,13 +132,12 @@ class LockpickSolver(Solver):
             else:
                 if i > 0 and len(m.edges) != len(moves[i-1].edges):
                     print(''.join(moves[i-1].edges[-1][1]), '->', end='')
-            if i > 0 and m.stock.get('m', 0) < moves[i-1].stock.get('m', 0):
+            if i > 0 and m.master:
                 print(" (MASTER)")
             else:
                 print()
-            #print(m)
     def get_next_states(self, state):
-        next_states = [[] for _ in range(self.num_edges)]
+        next_states = []
         for i, (start, seq, end) in enumerate(state.edges):
             access = []
             if start in state.access: access.append(False)
@@ -145,13 +147,18 @@ class LockpickSolver(Solver):
                 if s.stock.get('m', 0) > 0:
                     s2 = s.unlock(i, back=a, master=True)
                     if s2:
-                        next_states[0].append(s2)
+                        next_states.append(s2)
                 for si in range(len(seq)):
                     s = s.unlock(i, back=a)
-                    if not s:
+                    if s is None:
                         break
-                    next_states[si].append(s)
-        return sum(next_states, start=[])
+                    next_states.append(s)
+                if state.stock.get('n', 0) > 0 and state.edges[i][1][0].isupper() \
+                        and state.edges[i][1][0][0] != 'U' and state.edges[i][1][0][0] != 'N':
+                    s2 = LockpickState(state.access, state.stock, state.edges)
+                    s2.edges[i][1][0] = 'N'+s2.edges[i][1][0][1:]
+                    next_states.append(s2)
+        return next_states
     def check_finish(self, state):
         return self.end in state.access
 
@@ -199,7 +206,7 @@ p37 = parse('', ['p=6p=4p=5p=8p=6p=2p=3p=2c', ('P6P0', 1), (1, 'P3P0P2P0Pxc'), (
 p3A = parse('w', 'Kwc3|C2w|WkWkWkCc|KwWkOww|WkKw|WWW*|CxKwKwKkWwCo')
 p3B = parse('p4', [('Pp=0WwPp=0Oo=0Pp=0PoO', 0), 'PoPp=0o|OoOp|PpWow|Ow=0Www|WW*'])
 p3C = parse('c15', 'O2C4c=27C2C2|O2c4c4c4|O2c4O0c8C4|O2c4C4c12C8|O2C4C4|O2O0O2O0c4O6|o4O0o4O0o16O0o8O0C|O2C4C4c4Ox|C0C0*') #Takes a long time (7.8 min)
-p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0*|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')]) #Takes a long time
+p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0*|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')]) #Takes a while (0.8 min)
 
 p41 = parse('mw6', '!O0O2w2|OOp4!P4o2w2|W2W2o2P2P2r|!W3!W3R*')
 p42 = parse('g5p3', ['@G0@G0*|@P3g|P3G3', ('@P0', 1), (1, 'G@P2p6G5|G2p2P3g5')])
@@ -213,6 +220,15 @@ p4A = parse('mr', ['Rr|R|!R0!R0R', ('!R0!R0', 1), (1, '!R0r!R0r!R0R|!R0!R0mrrm!R
 p4B = parse('', ['#R0g=4|b2B3R|g4G2m|!G2B2!M0b3@R0#B0b2@B2#G0m4|m2@B3Gx|r5R4', ('!R0@G0#B0M0', 1), (1, 'G3b2#G0m|#M4r|!@#W0*')])
 p4C = parse('m10k15p20c25', 'M4m2|C8KP4P4KC|K12C3KP6K4C3P5|P5C4K12P8K5C12|M0M0K0K0P0P0C0C0*') #Takes a while (3.5 min)
 
+p51 = parse('w2', ['W2o3|Cn2|C2c3|O3c2', ('C4n13', 1), (1, 'KC6|P4|N4|W3O2|W0*')])
+p52 = parse('w', 'CCCBxCCC*|WpPwPpPoWoc2|WoOwOwOoPwc2|WnWnOpOpPnc2')
+p53 = parse('m24', [('M4M2|N3MM3', 1), (1, 'M3M2M3|MM8', 2), (2, 'M6n10'), (2, 'M3M2', 3), (3, 'M3M3N3|M3M0N0|MM4M3M', 4), (4, 'M2N2N4M2|M2M4M2M', 5), (5, 'M24M0*')]) #Takes a while (6.3 min)
+p54 = parse('', ['W2W2W4|W2W2W6p2|n8N0C0mM0C0OOKKPP*', ('c7', 1), (1, 'C5o2|C0C2k2')])
+p55 = parse('k10', ['K4|N2k25|K2n10K5N6|K2N4|K3K2', ('K0K12', 1), (1, 'N2K4|N2n15|K6n15K6|K0K2K0K0*')])
+p56 = parse('u4', ['U2m4U3n5O5O5u4', ('C2M2uU4m', 1), (1, 'KCm|O6c6|BxOPCu|U*|C4n2|C2n2')])
+p57 = parse('', 'c30|n20|u10|K24U*|U3C6C2N0C3C3Cxk8|U3C2N3C12NN0Ck8|U3C5N5CxC2N2k8|U3C0C8C6CxCk8')
+p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC*')]) #Takes a while (12.8 min)
+p5B = parse('m2', [('B3', 1), (1, 'g8|w4U3m2U2'), ('W4', 2), (2, 'G2', 3), (3, 'u9|k12Mg2Gx'), (2, 'u=5', 4), (4, 'UU0gK4'), (4, 'RxKK6', 5),
+    (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0*')]) #Haven't tried until I solve
 
-
-LockpickSolver().solve(p4C)
+LockpickSolver().solve(p47)
