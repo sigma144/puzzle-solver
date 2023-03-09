@@ -8,6 +8,8 @@ class Solver:
         starting_state.previous = None
         self.state_queue = [starting_state]
         count_iterate = 0
+        depth = 0
+        depth_target = 1
         print("Solving...")
         start_time = time.time()
         while len(self.state_queue) > 0:
@@ -36,6 +38,10 @@ class Solver:
                     #    return
                     self.state_queue.append(s)
                     self.prev_states.add(s)
+            if count_iterate == depth_target:
+                depth += 1
+                print("Depth " + str(depth) + '...')
+                depth_target = count_iterate + len(self.state_queue)
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
