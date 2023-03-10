@@ -72,14 +72,15 @@ class LockpickState:
         if aura != lock[0]:
             s = LockpickState(state.access, state.stock, state.edges)
             s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
-            s.edges[i][1].insert(si, (aura, color, num))
+            if back: s.edges[i][1].append((aura, color, num))
+            else: s.edges[i][1].insert(0, (aura, color, num))
             s.last_move = i
             s.last_access = back
             s.master = state.master
             next_states.append(s)
         if '~' in aura:
             color = 'N'
-        elif aura:
+        if aura.replace('~', ''):
             return next_states
         if not num: num = '1'
         if len(seq) == 0:
@@ -209,6 +210,16 @@ class LockpickSolver(Solver):
                     i2 += 1
                 next_states += states
         return next_states
+    def check_state(self, state): #Place to add some extra logic
+        #Logic for 5-3
+        #for edge in state.edges:
+        #    for lock in edge[1]:
+        #        if '~' in lock:
+        #            return False
+        #Logic for 6-10
+        #total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
+        #return total >= 25
+        return True
     def check_finish(self, state):
         return self.end in state.access
     def print_moves(self, moves):
@@ -273,6 +284,7 @@ p19 = parse('w16', [('W2W3W2W3W|WW6WW|W4WW2W3', 1), (1, 'W3W2W3|W2W3W2', 2)], 2)
 p110 = parse('p16o8g4c2', ['W6$|O4w|G2C2w', ('WP4wGP2O2|GP2wGO2', 0), 'P6O2c2|C3Gw|P6w|G2C2w|CCw'], 8) #Takes a bit (0.5 min)
 p1A = parse('k', ['PwWcPc', ('KkOpP|OpWwC|KoPkK', 1), (1, 'p|PpOw|OoWp|CoKoWwK$')], 19)
 p1B = parse('w5o2p3g4k2', [('PPcGG|WKcWW|WKcPG|GWcOK|WWcGW|OOcOK|GPcWP|GOcWO', 0), 'C8$'], 9) #Timeout
+p1Ba = parse('w5o2p3g4k2', [('PP|GG', 1), (1, 'WK|WW', 2), (2, 'WK|PG', 3), (3, 'GW|OK', 4), (4, 'WW|GW', 5), (5, 'OO|OK', 6), (6, 'GP|WP', 7), (7, 'GO|WO', 8)], 8)
 p1C = parse('w2', 'WkKoOcCw|WpPcCkKw|WgGkKpPw|WoOpPgGw|WcCgGoOw|P2p2K2k2C2c2O2$', 15)
 
 p21 = parse('m', [('W', 1), (1, 'mw'), (1, 'WP', 2), (2, 'W2w2|Wm|m|W2W$')], 7)
@@ -309,14 +321,14 @@ p44 = parse('m3', [('M3', 1), (1, 'o4O0c2C3m3|O2O2c2C2m2M3m5|M5M0$')], 6)
 p45 = parse('w', 'Kw!Orw|W4r|WoKo!CkR0O0!Oow|Oc2Cw3Ro|OcKoWo2Ow|OkCk!W0o|Wo!Co!Rc|!O2!W2$', 17)
 p46 = parse('b3', 'WoWow|#KwKc|BkWoWb|BkWc|R$|OwOw|Ko#Kc|BkWwOw|BkOc|#C2CCm', 21)
 p47 = parse('m2', 'Rx|Gx|Bx|!R0r2B0g2!B2g2G0b#B0m2|B2r2B0g2#G0b2G2b2G0m2|G2g2G0b@R2g2G0r2R0m2|R2bG2g2!B0r2#R0b2R2m2|M8B6$', 24)
-p48 = parse('c25p20k15m10', 'P4C3b3@K8G2P5K4|C3Bg5G3P0#C6G0K2P5|@G5C3K8C3rR!P6C6|!R@G8#B3R0G0B0!WKPC|M0K0P0C0$', 7) #Takes a long time (22 min)
+p48 = parse('c25p20k15m10', 'P4C3b3@K8G2P5K4|C3Bg5G3P0#C6G0K2P5|@G5C3K8C3rR!P6C6|!R@G8#B3R0G0B0!WKPC|M0K0P0C0$', 7) #Takes a very long time (22 min)
 p4A = parse('mr', ['Rr|R|!R0!R0R', ('!R0!R0', 1), (1, '!R0r!R0r!R0R|!R0!R0mrrm!R0R2'), (1, '!R0', 2), (2, 'rR!R0!R0Rr|!R0!R0!R0!R0!R0!R0$')], 40)
 p4B = parse('', ['#R0g=4|b2B3R|g4G2m|!G2B2!M0b3@R0#B0b2@B2#G0m4|m2@B3Gx|r5R4', ('!R0@G0#B0M0', 1), (1, 'G3b2#G0m|#M4r|!@#W0$')], 20)
 p4C = parse('m10k15p20c25', 'M4m2|C8KP4P4KC|K12C3KP6K4C3P5|P5C4K12P8K5C12|M0M0K0K0P0P0C0C0$', 7) #Takes a long time (6 min)
 
 p51 = parse('w2', ['W2o3|Cn2|C2c3|O3c2', ('C4n13', 1), (1, 'KC6|P4|N4|W3O2|W0$')], 9)
 p52 = parse('w', 'CCCBxCCC$|WpPwPpPoWoc2|WoOwOwOoPwc2|WnWnOpOpPnc2', 13)
-p53 = parse('m24', [('M4M2|N3MM3', 1), (1, 'M3M2M3|MM8', 2), (2, 'M6n10'), (2, 'M3M2', 3), (3, 'M3M3N3|M3M0N0|MM4M3M', 4), (4, 'M2N2N4M2|M2M4M2M', 5), (5, 'M24M0$')], 9) #Takes a long time ()
+p53 = parse('m24', [('M4M2|N3MM3', 1), (1, 'M3M2M3|MM8', 2), (2, 'M6n10'), (2, 'M3M2', 3), (3, 'M3M3N3|M3M0N0|MM4M3M', 4), (4, 'M2N2N4M2|M2M4M2M', 5), (5, 'M24M0$')], 9) #Use special logic
 p54 = parse('', ['W2W2W4|W2W2W6p2|n8N0C0mM0C0OOKKPP$', ('c7', 1), (1, 'C5o2|C0C2k2')], 10)
 p55 = parse('k10', ['K4|N2k25|K2n10K5N6|K2N4|K3K2', ('K0K12', 1), (1, 'N2K4|N2n15|K6n15K6|K0K2K0K0$')], 14)
 p56 = parse('u4', ['U2m4U3n5O5O5u4', ('C2M2uU4m', 1), (1, 'KCm|O6c6|BxOPCu|U$|C4n2|C2n2')], 12)
@@ -334,7 +346,7 @@ p66 = parse('n10', ['W3N5|K2C-4R3|N8N-4|O6G-3|B2N-3', ('N0n-7N0n7', 1), (1, 'C3N
 p67 = parse('g3', 'K12K12K12K12|K-12K-12K-12K-12|k-11k-12k10k-23k13k-2k=6G|k-15k14k24k-16k-9k43k=-6G|G2G0K0$', 5)
 p68 = parse('', 'OO0PP0CC0$|P0o2O2p-2P0o2P-2c2O-2p-2P0p-2C-2o2O|O0p2P0c-2C0o-2O0p2C2c2P-2o-2C2p2P|O2p-2C2o-2C-2o2O0c2P2p2P0c-2O-2c2C', 18)
 p69 = parse('', [('w-2w-W2', 1), (1, 'g4R-2r-2g-@R-2G3w6|wr2G2r-2|w-2g-w-2R-2w3g|wR2wr-2|w-r-!W16$')], 13)
-p610 = parse('m', ['U25$', ('PxbUu4#B3|Uxu4U2bC-x|p-5P-xu5B0c-C3n3U|c9C3b#P0u-#P0u-4u-M-3u4N0|P-4p4C-xu-U3u3b=0c-U-3', 1), (1, 'u-6')]) #No idea if this will ever solve :P
+p610 = parse('m', ['U25$', ('PxbUu4#B3|Uxu4U2bC-x|p-5P-xu5B0c-C3n3U|c9C3b#P0u-#P0u-4u-M-3u4N0|P-4p4C-xu-U3u3b=0c-U-3', 1), (1, 'u-6')], 18) #Takes a while (2 min), use extra logic
 p6A = parse('ur-1g-1b-1k', 'Uk=-1r=1b=1|Uk-b=1g=-1u|Ug=1r-b-u|Uk=-1r=0b=0u|Uk-r=1g=-1u|Ur=-1g=-1b=-1|Ub-g-r-u|Ub-g-r-u|>R-1G-1B-1K-1U$', 7) #Edge case (1-way drop)
 p6B = parse('', 'n2M4$|o2O2c2C2p-2P2c-2P2o-2|P2n-4m2|C-2o2C2p2P2c2O-2o2|O2p2P0o2C2o2P2o2|O2c2P-2p2O2c2O2p2N2o2O0p2C2c2C2o-2O2N-2', 23) #Takes a bit (1.4 min)
 p6C = parse('', 'RR0GG0BB0g2CC0$|C-2r2R2b2G-2b2R-2g-2C2r-2B2g2!R-2R|G0c-2B2g-2B-2g2G2b2C2c2#R0c-2!C-2G|C0r-2G-2b-2B0c2R2g2@C0b2B2r2G0B|!R-2b2B0r2G0b-2#G2c2C2r-2!B0c2G2C', 29)
