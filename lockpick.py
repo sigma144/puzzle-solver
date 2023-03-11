@@ -50,7 +50,11 @@ class LockpickState:
         si = -1 if back else 0
         lock = seq.pop(si)
         aura, color, num = lock
-        if aura == '>':
+        if aura == '$':
+            state.access = set(state.access)
+            state.access.add('Win')
+            return [state]
+        elif aura == '>':
             state.access = set(state.access)
             state.access.remove(start)
             return [] if back else [state]
@@ -145,12 +149,14 @@ def parse(stock, edges, target_moves=None):
         edges = [edges]
     state = LockpickState({0}, {}, [])
     state.target_moves = target_moves
+    state.previous = None
     parse = re.findall(r"[a-zA-Z]-?\d*", stock)
     for k in parse:
         if len(k) == 1:
             state.stock[k[0]] = 1
         else:
             state.stock[k[0]] = int(k[1:])
+    end = False
     for e in edges:
         tup = ()
         if isinstance(e, str):
@@ -166,13 +172,11 @@ def parse(stock, edges, target_moves=None):
         a, seq, b = tup
         seq = seq.split('|')
         for s in seq:
-            end = False
-            if s and s[-1] == '$':
-                s = s[:-1]
+            if '$' in s:
                 end = True
-            parse = re.findall(r"[!#@]*[a-zA-Z]/[a-zA-Z]-?x|[!#@]*[a-zA-Z]-?x|[!#@]*[a-z]=-?\d*|[!#@]*[a-z]-?\*|[!#@]*[a-zA-Z]/[a-zA-z]-?\d*|[!#@]*[a-zA-Z]-?\d*|>", s)
+            parse = re.findall(r"[!#@]*[a-zA-Z]/[a-zA-Z]-?x|[!#@]*[a-zA-Z]-?x|[!#@]*[a-z]=-?\d*|[!#@]*[a-z]-?\*|[!#@]*[a-zA-Z]/[a-zA-z]-?\d*|[!#@]*[a-zA-Z]-?\d*|>|<|\$", s)
             for i, lock in enumerate(parse):
-                if lock in '<>':
+                if lock in '<>$':
                     parse[i] = (lock, '', '')
                     continue
                 aura = color = num = None
@@ -189,7 +193,11 @@ def parse(stock, edges, target_moves=None):
                     color = lock[ai:]
                     num = ''
                 parse[i] = (aura, color, num)
-            state.edges.append((a, parse, 144 if end else b))
+            state.edges.append((a, parse, b))
+    if not end:
+        print(state)
+        print('Goal is missing')
+        return None
     return state
 
 class LockpickSolver(Solver):
@@ -221,7 +229,7 @@ class LockpickSolver(Solver):
         #return total >= 25
         return True
     def check_finish(self, state):
-        return self.end in state.access
+        return 'Win' in state.access
     def print_moves(self, moves):
         red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
         for i, m in enumerate(moves):
@@ -257,10 +265,8 @@ class LockpickSolver(Solver):
                         print(black + lock[1] + lock[2], end='')
             print(black)
     def solve(self, state, prnt=True):
-        state.previous = None
         #print(state)
         self.start = 0
-        self.end = max([e[2] for e in state.edges if e[2]])
         target = state.target_moves
         #moves = self.solve_optimal_debug(state)
         moves = self.solve_optimal(state, prnt=False)
@@ -280,11 +286,11 @@ p15 = parse('w', 'WwBbOw|OwBoo|WoOw|OoWb|WW$', 10)
 p16 = parse('o', 'OoOOcCO$|OcCocCC$|OoOoCoC$', 4)
 p17 = parse('wp', [('CoPkCoP|OoCkPwOwW|WcKcPwKcWoO', 0), 'KP$'], 9)
 p18 = parse('w2', 'O3w4|W2ow3|W6$|O2w2|W2o2w', 4)
-p19 = parse('w16', [('W2W3W2W3W|WW6WW|W4WW2W3', 1), (1, 'W3W2W3|W2W3W2', 2)], 2)
+p19 = parse('w16', [('W2W3W2W3W|WW6WW|W4WW2W3', 1), (1, 'W3W2W3$|W2W3W2$', 2)], 2)
 p110 = parse('p16o8g4c2', ['W6$|O4w|G2C2w', ('WP4wGP2O2|GP2wGO2', 0), 'P6O2c2|C3Gw|P6w|G2C2w|CCw'], 8) #Takes a bit (0.5 min)
 p1A = parse('k', ['PwWcPc', ('KkOpP|OpWwC|KoPkK', 1), (1, 'p|PpOw|OoWp|CoKoWwK$')], 19)
 p1B = parse('w5o2p3g4k2', [('PPcGG|WKcWW|WKcPG|GWcOK|WWcGW|OOcOK|GPcWP|GOcWO', 0), 'C8$'], 9) #Timeout
-p1Ba = parse('w5o2p3g4k2', [('PP|GG', 1), (1, 'WK|WW', 2), (2, 'WK|PG', 3), (3, 'GW|OK', 4), (4, 'WW|GW', 5), (5, 'OO|OK', 6), (6, 'GP|WP', 7), (7, 'GO|WO', 8)], 8)
+p1Ba = parse('w5o2p3g4k2', [('PP|GG', 1), (1, 'WK|WW', 2), (2, 'WK|PG', 3), (3, 'GW|OK', 4), (4, 'WW|GW', 5), (5, 'OO|OK', 6), (6, 'GP|WP', 7), (7, 'GO$|WO$')], 8)
 p1C = parse('w2', 'WkKoOcCw|WpPcCkKw|WgGkKpPw|WoOpPgGw|WcCgGoOw|P2p2K2k2C2c2O2$', 15)
 
 p21 = parse('m', [('W', 1), (1, 'mw'), (1, 'WP', 2), (2, 'W2w2|Wm|m|W2W$')], 7)
@@ -297,7 +303,7 @@ p27 = parse('w15o15c15', ['C2W8C4|CO6C12|W2O2C2|O4|W0O0C0$', ('C6|W2O12C2', 1), 
 p28 = parse('o3p3c3', 'C3P3O3m|O12o3p3O3c3P3o3P3o3|O3p3O3p3P6o3o3O6o3c3|C3c3P6o3c3C3p3O3p3C3p3|C6c6O6o6P3P3C3$', 9)
 p29 = parse('o24', ['O24W3w5', ('O2o2O4', 1), (1, 'W8o2|Ow2|O4o4w4'), (1, 'W2oO2W0o4W2', 2), (2, "O0WW0$|O8|O6W2w2|O0w4|O2W6o2w8|W0w4o6|O8")], 14)
 #p210 = Bridge, Weird edge case
-p2A = parse('m3w2k2o2c3p4', [('RW|KO', 1), (1, 'CC|OK', 2), (2, 'OK|WP', 3), (3, 'CC|WO', 4), (4, 'OR|OW', 5), (5, 'PP|KO', 6), (6, 'OR|RW', 7), (7, 'CC|PP', 8)], 8)
+p2A = parse('m3w2k2o2c3p4', [('RW|KO', 1), (1, 'CC|OK', 2), (2, 'OK|WP', 3), (3, 'CC|WO', 4), (4, 'OR|OW', 5), (5, 'PP|KO', 6), (6, 'OR|RW', 7), (7, 'CC$|PP$')], 8)
 p2B = parse('m', ['O4mK2mp4|W2k24w3', ('K24', 1), (1, 'C2k2W8wc|W3mWCR$|P4m')], 9)
 p2C = parse('m3p16o3', [('O2', 1), ('O4', 3), (1, 'O2P4|O2o6|O2P2'), (1, 'O4P2', 2), (2, 'O2p2o6|OOOOO3P3P6'), (2, 'O2', 3), (3, 'P4o|P0P0P0P0$')], 11)
 p2D = parse('o4p6', ['P3O2|P6o4', ('O4', 1), (1, 'P3o2O2p3|PP0$'), (1, 'o6', 2), (2, 'O2O0p3|OO0p2|P6O6p12'), (2, 'P0Oo2O', 3), (3, 'O2o4p3|P3P0P3o2O6p5')], 16)
@@ -312,7 +318,7 @@ p37 = parse('', ['p=6p=4p=5p=8p=6p=2p=3p=2c', ('P6P0', 1), (1, 'P3P0P2P0Pxc'), (
 p3A = parse('w', 'Kwc3|C2w|WkWkWkCc|KwWkOww|WkKw|WWW$|CxKwKwKkWwCo', 15)
 p3B = parse('p4', [('Pp=0WwPp=0Oo=0Pp=0PoO', 0), 'PoPp=0o|OoOp|PpWow|Ow=0Www|WW$'], 14)
 p3C = parse('c15', 'O2C4c=27C2C2|O2c4c4c4|O2c4O0c8C4|O2c4C4c12C8|O2C4C4|O2O0O2O0c4O6|o4O0o4O0o16O0o8O0C|O2C4C4c4Ox|C0C0$', 17) #Takes a long time (8.2 min)
-p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0$|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')], 11) #Edge case (m=0), Takes a while (1 min)
+p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0$|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')], 11) #Takes a while (1 min)
 
 p41 = parse('mw6', '!O0O2w2|OOp4!P4o2w2|W2W2o2P2P2r|!W3!W3R$', 7)
 p42 = parse('g5p3', ['@G0@G0$|@P3g|P3G3', ('@P0', 1), (1, 'G@P2p6G5|G2p2P3g5')], 12)
