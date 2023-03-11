@@ -9,6 +9,7 @@ class LockpickState:
         self.last_move = None
         self.last_access = None
         self.master = []
+        self.win = False
     def __eq__(self, state):
         if self.stock != state.stock:
             return False
@@ -51,8 +52,7 @@ class LockpickState:
         lock = seq.pop(si)
         aura, color, num = lock
         if aura == '$':
-            state.access = set(state.access)
-            state.access.add('Win')
+            state.win = True
             return [state]
         elif aura == '>':
             state.access = set(state.access)
@@ -73,7 +73,7 @@ class LockpickState:
             aura = '~'+aura
         elif stock.get('n', 0) < 0 and '~' in aura:
             aura = aura.replace('~', '')
-        if aura != lock[0]:
+        if aura != lock[0] and not (aura.replace('~', '') == lock[0] and lock[2] != '0' and 'M' not in lock[1]):
             s = LockpickState(state.access, state.stock, state.edges)
             s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
             if back: s.edges[i][1].append((aura, color, num))
@@ -219,17 +219,29 @@ class LockpickSolver(Solver):
                 next_states += states
         return next_states
     def check_state(self, state): #Place to add some extra logic
-        #Logic for 5-3
-        #for edge in state.edges:
-        #    for lock in edge[1]:
-        #        if '~' in lock:
-        #            return False
-        #Logic for 6-10
-        #total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
-        #return total >= 25
+        if not self.special:
+            return True
+        if self.special == '2-10':
+            prev = state.previous
+            if state.last_move in [3, 4] and prev.last_move not in [3, 4]:
+                if len(prev.edges[0][1]) < 2 or prev.stock.get('o', 0) == 0:
+                    return False
+            elif prev.last_move in [3, 4] and state.last_move not in [3, 4, 0]:
+                if prev.stock.get('o', 0) == 0:
+                    return False
+        elif self.special == '5-3':
+            for edge in state.edges:
+                for lock in edge[1]:
+                    if '~' in lock:
+                        return False
+        elif self.special == '6-10':
+            if len(state.edges[0][1]) <= 1:
+                return True
+            total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
+            return total >= 25
         return True
     def check_finish(self, state):
-        return 'Win' in state.access
+        return state.win
     def print_moves(self, moves):
         red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
         for i, m in enumerate(moves):
@@ -267,6 +279,13 @@ class LockpickSolver(Solver):
     def solve(self, state, prnt=True):
         #print(state)
         self.start = 0
+        self.special = None
+        if state == p210:
+            self.special = '2-10'
+        if state == p53:
+            self.special = '5-3'
+        if state == p610:
+            self.special = '6-10'
         target = state.target_moves
         #moves = self.solve_optimal_debug(state)
         moves = self.solve_optimal(state, prnt=False)
@@ -302,7 +321,7 @@ p26 = parse('mo4', ['O2p2WWp2|O2w2WWp2|WWp2PPPPo4', ('PPO0', 1), (1, 'O2O2$|OOw4
 p27 = parse('w15o15c15', ['C2W8C4|CO6C12|W2O2C2|O4|W0O0C0$', ('C6|W2O12C2', 1), (1, 'C3OW3W|W6O')], 6)
 p28 = parse('o3p3c3', 'C3P3O3m|O12o3p3O3c3P3o3P3o3|O3p3O3p3P6o3o3O6o3c3|C3c3P6o3c3C3p3O3p3C3p3|C6c6O6o6P3P3C3$', 9)
 p29 = parse('o24', ['O24W3w5', ('O2o2O4', 1), (1, 'W8o2|Ow2|O4o4w4'), (1, 'W2oO2W0o4W2', 2), (2, "O0WW0$|O8|O6W2w2|O0w4|O2W6o2w8|W0w4o6|O8")], 14)
-#p210 = Bridge, Weird edge case
+p210 = parse('o', ['O0o|OoP2c|OoC2p2|Oc|Po4', ('O0', 1), (1, 'P2p2C2O0P0$|Oc2Po2|PCpO2c2')], 11) #Bridge edge case (special logic)
 p2A = parse('m3w2k2o2c3p4', [('RW|KO', 1), (1, 'CC|OK', 2), (2, 'OK|WP', 3), (3, 'CC|WO', 4), (4, 'OR|OW', 5), (5, 'PP|KO', 6), (6, 'OR|RW', 7), (7, 'CC$|PP$')], 8)
 p2B = parse('m', ['O4mK2mp4|W2k24w3', ('K24', 1), (1, 'C2k2W8wc|W3mWCR$|P4m')], 9)
 p2C = parse('m3p16o3', [('O2', 1), ('O4', 3), (1, 'O2P4|O2o6|O2P2'), (1, 'O4P2', 2), (2, 'O2p2o6|OOOOO3P3P6'), (2, 'O2', 3), (3, 'P4o|P0P0P0P0$')], 11)
@@ -334,12 +353,12 @@ p4C = parse('m10k15p20c25', 'M4m2|C8KP4P4KC|K12C3KP6K4C3P5|P5C4K12P8K5C12|M0M0K0
 
 p51 = parse('w2', ['W2o3|Cn2|C2c3|O3c2', ('C4n13', 1), (1, 'KC6|P4|N4|W3O2|W0$')], 9)
 p52 = parse('w', 'CCCBxCCC$|WpPwPpPoWoc2|WoOwOwOoPwc2|WnWnOpOpPnc2', 13)
-p53 = parse('m24', [('M4M2|N3MM3', 1), (1, 'M3M2M3|MM8', 2), (2, 'M6n10'), (2, 'M3M2', 3), (3, 'M3M3N3|M3M0N0|MM4M3M', 4), (4, 'M2N2N4M2|M2M4M2M', 5), (5, 'M24M0$')], 9) #Use special logic
+p53 = parse('m24', [('M4M2|N3MM3', 1), (1, 'M3M2M3|MM8', 2), (2, 'M6n10'), (2, 'M3M2', 3), (3, 'M3M3N3|M3M0N0|MM4M3M', 4), (4, 'M2N2N4M2|M2M4M2M', 5), (5, 'M24M0$')], 9) #Uses special logic
 p54 = parse('', ['W2W2W4|W2W2W6p2|n8N0C0mM0C0OOKKPP$', ('c7', 1), (1, 'C5o2|C0C2k2')], 10)
 p55 = parse('k10', ['K4|N2k25|K2n10K5N6|K2N4|K3K2', ('K0K12', 1), (1, 'N2K4|N2n15|K6n15K6|K0K2K0K0$')], 14)
 p56 = parse('u4', ['U2m4U3n5O5O5u4', ('C2M2uU4m', 1), (1, 'KCm|O6c6|BxOPCu|U$|C4n2|C2n2')], 12)
 p57 = parse('', 'c30|n20|u10|K24U$|U3C6C2N0C3C3Cxk8|U3C2N3C12NN0Ck8|U3C5N5CxC2N2k8|U3C0C8C6CxCk8', 13)
-p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC$')], 8) #Takes a while (2.2 min) use hashstr()
+p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC$')], 8) #Takes a while (1.2 min)
 p5B = parse('m2', [('B3', 1), (1, 'g8|w4U3m2U2'), ('W4', 2), (2, 'G2', 3), (3, 'u9|k12Mg2Gx'), (2, 'u=5', 4), (4, 'UU0gK4'), (4, 'RxKK6', 5),
     (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0$')]) #Haven't tried until I solve
 
@@ -352,9 +371,9 @@ p66 = parse('n10', ['W3N5|K2C-4R3|N8N-4|O6G-3|B2N-3', ('N0n-7N0n7', 1), (1, 'C3N
 p67 = parse('g3', 'K12K12K12K12|K-12K-12K-12K-12|k-11k-12k10k-23k13k-2k=6G|k-15k14k24k-16k-9k43k=-6G|G2G0K0$', 5)
 p68 = parse('', 'OO0PP0CC0$|P0o2O2p-2P0o2P-2c2O-2p-2P0p-2C-2o2O|O0p2P0c-2C0o-2O0p2C2c2P-2o-2C2p2P|O2p-2C2o-2C-2o2O0c2P2p2P0c-2O-2c2C', 18)
 p69 = parse('', [('w-2w-W2', 1), (1, 'g4R-2r-2g-@R-2G3w6|wr2G2r-2|w-2g-w-2R-2w3g|wR2wr-2|w-r-!W16$')], 13)
-p610 = parse('m', ['U25$', ('PxbUu4#B3|Uxu4U2bC-x|p-5P-xu5B0c-C3n3U|c9C3b#P0u-#P0u-4u-M-3u4N0|P-4p4C-xu-U3u3b=0c-U-3', 1), (1, 'u-6')], 18) #Takes a while (2 min), use extra logic
+p610 = parse('m', ['U25$', ('PxbUu4#B3|Uxu4U2bC-x|p-5P-xu5B0c-C3n3U|c9C3b#P0u-#P0u-4u-M-3u4N0|P-4p4C-xu-U3u3b=0c-U-3', 1), (1, 'u-6')], 18) #Uses special logic
 p6A = parse('ur-1g-1b-1k', 'Uk=-1r=1b=1|Uk-b=1g=-1u|Ug=1r-b-u|Uk=-1r=0b=0u|Uk-r=1g=-1u|Ur=-1g=-1b=-1|Ub-g-r-u|Ub-g-r-u|>R-1G-1B-1K-1U$', 7) #Edge case (1-way drop)
-p6B = parse('', 'n2M4$|o2O2c2C2p-2P2c-2P2o-2|P2n-4m2|C-2o2C2p2P2c2O-2o2|O2p2P0o2C2o2P2o2|O2c2P-2p2O2c2O2p2N2o2O0p2C2c2C2o-2O2N-2', 23) #Takes a bit (1.4 min)
+p6B = parse('', 'n2M4$|o2O2c2C2p-2P2c-2P2o-2|P2n-4m2|C-2o2C2p2P2c2O-2o2|O2p2P0o2C2o2P2o2|O2c2P-2p2O2c2O2p2N2o2O0p2C2c2C2o-2O2N-2', 23)
 p6C = parse('', 'RR0GG0BB0g2CC0$|C-2r2R2b2G-2b2R-2g-2C2r-2B2g2!R-2R|G0c-2B2g-2B-2g2G2b2C2c2#R0c-2!C-2G|C0r-2G-2b-2B0c2R2g2@C0b2B2r2G0B|!R-2b2B0r2G0b-2#G2c2C2r-2!B0c2G2C', 29)
 
 p71 = parse('w6', [('O/W6', 1), (1, 'Ox|O-x|W2o6|W2o-4'), ('W/O6', 2), (2, 'O2O0o12o-4W/O-4|W0$')], 10)
@@ -370,4 +389,4 @@ p79 = parse('', [('w-32w*w=-4w=54w=-42w-8|w=-12w-1w*w=71w=-17w-16|w-64w=-18w-2w=
 
 
 
-LockpickSolver().solve(p76)
+LockpickSolver().solve(p210)
