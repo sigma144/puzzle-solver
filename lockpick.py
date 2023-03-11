@@ -297,6 +297,28 @@ class LockpickSolver(Solver):
         if prnt:
             self.print_moves(moves)
 
+def test():
+    solver = LockpickSolver()
+    tests = [
+        p11, p21, p31, p41, p51,      p71,
+        p12, p22,      p42, p52, p62, p72,
+        p13, p23, p33, p43, p53, p63, p73,
+        p14, p24, p34, p44, p54, p64, p74,
+        p15, p25, p35, p45, p55, p65, p75,
+        p16, p26, p36, p46, p56, p66, p76,
+        p17, p27, p37, p47, p57, p67, 
+        p18, p28,                p68, p78,
+        p19, p29,                p69, 
+             p210,               p610,
+        p1A, p2A, p3A, p4A,
+             p2B, p3B, p4B,      p6B,
+        p1C, p2C,                p6C,
+             p2D]
+    for i, puzzle in enumerate(tests):
+            print('Test', str(i+1)+'/'+str(len(tests)))
+            sol = solver.solve(puzzle, prnt=False)
+    print("Test Complete")
+
 p11 = parse('w', 'Wo|Op|P$', 3)
 p12 = parse('w', 'Wo|WwO$', 3)
 p13 = parse('w', 'Wo|Pk|Wp|Oc|K$', 3)
@@ -390,3 +412,5 @@ p79 = parse('', [('w-32w*w=-4w=54w=-42w-8|w=-12w-1w*w=71w=-17w-16|w-64w=-18w-2w=
 
 
 LockpickSolver().solve(p210)
+
+#test()
