@@ -55,13 +55,17 @@ class LockpickState:
             state.win = True
             return [state]
         elif aura == '>':
+            if back: return []
             state.access = set(state.access)
             state.access.remove(start)
-            return [] if back else [state]
+            if not seq: state.access.add(end)
+            return [state]
         elif aura == '<':
+            if not back: return []
             state.access = set(state.access)
             state.access.remove(end)
-            return [state] if back else []
+            if not seq: state.access.add(start)
+            return [state]
         if stock.get('r', 0) >= 1 and '!' in aura:
             aura = aura.replace('!', '')
         if stock.get('g', 0) >= 5 and '@' in aura:
@@ -69,7 +73,7 @@ class LockpickState:
         if stock.get('b', 0) >= 3 and '#' in aura:
             aura = aura.replace('#', '')
         if stock.get('n', 0) > 0 and color.isupper() and \
-            'U' not in color and 'N' not in color and '~' not in aura:
+            'U' not in color and color != 'N' and '~' not in aura:
             aura = '~'+aura
         elif stock.get('n', 0) < 0 and '~' in aura:
             aura = aura.replace('~', '')
@@ -116,7 +120,8 @@ class LockpickState:
                 s.master = state.master[:] + [len(seq)]
                 s.last_move = i
                 s.last_access = back
-                s.stock['m'] -= 1
+                if 'm*' not in s.stock:
+                    s.stock['m'] -= 1
                 if s.stock['m'] == 0:
                     del s.stock['m']
                 next_states.append(s)
@@ -150,10 +155,12 @@ def parse(stock, edges, target_moves=None):
     state = LockpickState({0}, {}, [])
     state.target_moves = target_moves
     state.previous = None
-    parse = re.findall(r"[a-zA-Z]-?\d*", stock)
+    parse = re.findall(r"[a-zA-Z]-?\*?\d*", stock)
     for k in parse:
         if len(k) == 1:
             state.stock[k[0]] = 1
+        elif '*' in k:
+            state.stock[k[:2]] = 1
         else:
             state.stock[k[0]] = int(k[1:])
     end = False
@@ -234,11 +241,27 @@ class LockpickSolver(Solver):
                 for lock in edge[1]:
                     if '~' in lock:
                         return False
+        elif self.special == '5-B':
+            if state.last_move == 3 and state.stock.get('u', 0) == 0:
+                return False
         elif self.special == '6-10':
             if len(state.edges[0][1]) <= 1:
                 return True
             total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
             return total >= 25
+        elif self.special == '7-E':
+            if state.last_move == 0 and state.stock.get('c', 0) == 0:
+                return False
+            elif state.last_move == 1 and state.stock.get('o', 0) == 0:
+                return False
+            elif state.last_move == 2 and state.stock.get('p', 0) == 0:
+                return False
+            elif state.last_move == 3 and state.previous.stock.get('c', 0) != 0:
+                return False
+            elif state.last_move == 4 and state.previous.stock.get('o', 0) != 0:
+                return False
+            elif state.last_move == 5 and state.previous.stock.get('p', 0) != 0:
+                return False
         return True
     def check_finish(self, state):
         return state.win
@@ -280,12 +303,9 @@ class LockpickSolver(Solver):
         #print(state)
         self.start = 0
         self.special = None
-        if state == p210:
-            self.special = '2-10'
-        if state == p53:
-            self.special = '5-3'
-        if state == p610:
-            self.special = '6-10'
+        cases = {p210:'2-10', p53:'5-3', p5B:'5-B', p610:'6-10', p7E:'7-E'}
+        if state in cases:
+            self.special = cases[state]
         target = state.target_moves
         #moves = self.solve_optimal_debug(state)
         moves = self.solve_optimal(state, prnt=False)
@@ -381,8 +401,8 @@ p55 = parse('k10', ['K4|N2k25|K2n10K5N6|K2N4|K3K2', ('K0K12', 1), (1, 'N2K4|N2n1
 p56 = parse('u4', ['U2m4U3n5O5O5u4', ('C2M2uU4m', 1), (1, 'KCm|O6c6|BxOPCu|U$|C4n2|C2n2')], 12)
 p57 = parse('', 'c30|n20|u10|K24U$|U3C6C2N0C3C3Cxk8|U3C2N3C12NN0Ck8|U3C5N5CxC2N2k8|U3C0C8C6CxCk8', 13)
 p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC$')], 8) #Takes a while (1.2 min)
-p5B = parse('m2', [('B3', 1), (1, 'g8|w4U3m2U2'), ('W4', 2), (2, 'G2', 3), (3, 'u9|k12Mg2Gx'), (2, 'u=5', 4), (4, 'UU0gK4'), (4, 'RxKK6', 5),
-    (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0$')]) #Haven't tried until I solve
+p5B = parse('m2', ['B3g8w4U3m2U2', ('W4', 2), (2, 'G2u9k12Mg2Gx'), (2, 'u=5', 4), (4, 'UU0gK4'), (4, 'RxKK6', 5),
+    (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0$')], 23) #Takes a while (2.5 min), uses special logic
 
 p61 = parse('', [('c-5c9c-4c-4|c-2c4c4c-2|c2c3c-8c3c4c-4|c-1c-1c-2c7c-1c-1', 1), (1, 'C24$|c-1c-2c-3c8|c-2c3c-4c3|c-6c2c2c')], 8) #Takes a while (3.8 min)
 p62 = parse('', [('O-2c4o-2|C2o5|o-4O-5$'), ('O-3o-2C4c-4O-2o4', 1), (1, 'C-2o-5|O8|C-2o-2|C-2o3|C-2c2')], 9)
@@ -404,13 +424,23 @@ p73 = parse('o5c7', [('C/OxO/Cx', 1), (1, 'C/Ox', 2), (2, 'c-|C/Oxc'), (1, 'O0C0
 p74 = parse('', 'W/C-xW/C-xW/C-x|W24W24W0$|c-1|c-8|c-3|c4|c-3|c-3', 7)
 p75 = parse('', [('w4w*Wxw2', 1), (1, 'mP/W4M0P0pP0$|P6W5p*|W/P2w5P4p-6|W/P-4p-|P-4W/P-2p-p4')], 7)
 p76 = parse('cm5', ['k60C', ('M/C0c8', 1), (1, 'CK20KK4K|K2K3C3K20C2K|CK6C8K20', 2), (2, 'M/C0M/K0$')], 6)
-p77 = parse('', ['c*c-*', ('c7', 1), (1, 'P/C4p*p-*p*|C4CP-1C/P-3m2'), (1, 'P-2P-3C|C2P-4', 2), (2, 'P0m'), (1, 'p-4M2P-4C4', 3), (3, 'C8P-8$|C8C0p-*p-4')]) #Haven't tried until I solve
+p77 = parse('', ['c*c-*', ('c7', 1), (1, 'P/C4p*p-*p*|C4CP-1C/P-3m2'), (1, 'P-2P-3C|C2P-4', 2), (2, 'P0m'), (1, 'p-4M2P-4C4', 3), (3, 'C8P-8$|C8C0p-*p-4')], 15) #Takes a bit (0.5 min)
 p78 = parse('c4', 'C24$|P/C8c4|C8p-8|P8c2|P/C4p4|C-4c6|P/C4c2|C-4p8|C/P4c2|P-4p4|C/P4c4|P-4c4', 13)
 p79 = parse('', [('w-32w*w=-4w=54w=-42w-8|w=-12w-1w*w=71w=-17w-16|w-64w=-18w-2w=92w-*w*|w=-1w*w-4w=77w=-99w=-3', 1), (1, 'W0$')], 10) #Takes a long time (8 min)
-#Rest of World 7 has not been visited yet
+p710 = parse('m3b-5o8c9', ['M/C0M/O0M/B0$|B-3B4O/B5|B-xC-2#C3|CO4M/B-1b5B2O/B3C3', ('B/M4M2B-4', 1), (1, 'C/O-1|#O-4m|B/C8|Bx#B-5C3')], 16)
+p7A = parse('p4', 'P/C-xC/Px|C-4P/C-xP/C-x|P24P/C-x|P2C/Px|PC/Px|P8C/PxP/C-xC/Px|PxP/C-x|C-xC/Px|C-2P/C-x|P256$', 10) #Max possible score is 568
+p7B = parse('o4', 'n17|N-3!N0$|N/O5u7O-4r|O/N8o-R2|O4r-2R2o=4|N!N-1|U/R-1UU0r2r=0N/O4|U/R-1U2U0r-r=0N/U7', 10)
+p7C = parse('m1m*', 'U3@C-8$|G/PC2G/P-1G/PN3G/P2P-3P2p-u|P-4P/G2G-5G/PP2W4pu|RP/G-2G/P-4P/G-1G-4G/P-4G/P-1p-4u', 6)
+p7D = parse('', ['!W12$|C2C0O2w2|KC2Ow2|KR2w2|K12', ('o10k10c10', 1), (1, 'NN0K0O0C2w6|NC3KO6|OKk2|C4n13|N/K4rN8w6')], 16) #Takes a bit (0.8 min)
+p7E = parse('', ['c-|o-|p-|cccccccc|oooooooo|pppppppp', ('>', 1), (1, 'W/Cx|W/C-x', 2), (2, 'W/OxW/Ox|W/O-xW/O-x', 3), (3, 'W/PxW/PxW/Px|W/P-xW/P-xW/P-x', 4), 
+    (4, 'W17W0', 5), (5, 'W/Px|W/P-x', 6), (6, 'W/CxW/Cx|W/C-xW/C-x', 7), (7, 'W/OxW/OxW/Ox|W/O-xW/O-xW/O-x', 8),
+    (8, 'W2W0', 9), (9, 'W/Ox|W/O-x', 10), (10, 'W/PxW/Px|W/P-xW/P-x', 11), (11, 'W/CxW/CxW/Cx|W/C-xW/C-xW/C-x', 12), (12, 'W17W0$')], 18) #Uses special logic
 
+finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1', 2), (2, 'w', 3), (3, 'Wo=-1o=-1!C!Cg-5u|N-3O-xKWC8u'), (2, 'mWO0O0M0', 4),
+    (4, 'K4C2OxBP-6W!O0u'), (4, 'c4w2', 5), (5, '#C2WP-1wG4B0|C2WPk17K12C3', 6), (6, 'ru'), (5, 'm2o=1W0C0C0O0O0O0M0c6b', 7), (7, 'p-'), (7, 'P6w2#O0u'), (7, 'm3K12BP-1w2o=-1', 8),
+    (8, 'P0B@O0u'), (8, 'k31O0O0M0m', 9), (9, 'RN-3B0g-5'), (9, 'K4w2P-1@C@C|BG12Pn-99C', 10), (10, 'O0b2u'), (9, 'WWC4o=1M0m2', 11), (11, 'C0WOxKW0|PPC-12O0W0P-1P-1', 12),
+    (12, 'r-RGxWc-u'), (12, 'R0W0M0', 13), (13, 'o=1!W0G-xC0C0u|m5U10M0O0K0R0G0B0n92N0$')]) #Put in for kicks and giggles, I highly doubt it will solve this!
 
-
-LockpickSolver().solve(p210)
+LockpickSolver().solve(p7E)
 
 #test()
