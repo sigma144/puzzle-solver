@@ -1,5 +1,5 @@
 from solver import Solver
-import re
+import re, time
 
 class LockpickState:
     def __init__(self, access, stock, edges):
@@ -13,14 +13,11 @@ class LockpickState:
     def __eq__(self, state):
         if self.stock != state.stock:
             return False
-        #return self.hashstr() == state.hashstr() #Better with duplicated edges, otherwise about 2x slower
         return self.edges == state.edges
     def __hash__(self):
-        #return hash(self.hashstr()) #Better with duplicated edges, otherwise about 2x slower
-        return hash(str(self.stock) + str(self.edges))
-    def hashstr(self):
-        strs = [str(e) for e in self.edges if e[1]]
-        return str(self.stock) + ''.join(sorted(strs))
+        #return hash(str(self.edges))
+        #return hash(str(self.edges)) + len(self.stock)
+        return hash((str(self.edges), str(sorted([(k, v) for k, v in self.stock.items()]))))
     def __repr__(self) -> str:
         s = 'Access:' + str(self.access) + '\n'
         s += 'Stock:' + str(self.stock) + '\n'
@@ -334,10 +331,12 @@ def test():
              p2B, p3B, p4B,      p6B,
         p1C, p2C,                p6C,
              p2D]
+    start_time = time.time()
     for i, puzzle in enumerate(tests):
             print('Test', str(i+1)+'/'+str(len(tests)))
             sol = solver.solve(puzzle, prnt=False)
-    print("Test Complete")
+    elapsed = time.time() - start_time
+    print("Test Complete in {:.2f} seconds.".format(elapsed))
 
 p11 = parse('w', 'Wo|Op|P$', 3)
 p12 = parse('w', 'Wo|WwO$', 3)
@@ -370,7 +369,7 @@ p2C = parse('m3p16o3', [('O2', 1), ('O4', 3), (1, 'O2P4|O2o6|O2P2'), (1, 'O4P2',
 p2D = parse('o4p6', ['P3O2|P6o4', ('O4', 1), (1, 'P3o2O2p3|PP0$'), (1, 'o6', 2), (2, 'O2O0p3|OO0p2|P6O6p12'), (2, 'P0Oo2O', 3), (3, 'O2o4p3|P3P0P3o2O6p5')], 16)
 
 p31 = parse('', ['o', ('Oxo2Ox', 1), (1, 'pp'), (1, 'Px', 2), (2, 'Pxo|Pxo2'), (2, 'Ox', 3), (3, 'p|OO$')], 10)
-p32 = parse('c4', 'P8$|CkKp|CkKp|CkKp|CkK0p|KKxc4|CkK0p|CkK0p|CkKp|CkK0p', 14) #use hashstr()
+p32 = parse('c4', 'P8$|CkKp|CkKp|CkKp|CkK0p|KKxc4|CkK0p|CkK0p|CkKp|CkK0p', 14) #Takes a while (2.9 min)
 p33 = parse('c6w20o40', ['C6Wx|C6Ox', ('O24W5|WO5O|O5W5', 1), (1, 'W5O2W|W4OO5|W5W5', 2), (2, 'O5O2W5W2O0W0$')], 7)
 p34 = parse('', [('w3w=1Ww3', 1), (1, 'Ww=3|Ww=2|WW3W2$')], 7)
 p35 = parse('', 'Oo3c4|O4c4|O3o3c4|C24$|O2o4c4|O6o=3c4|O5o5c4|o3OOOo3', 9)
@@ -379,7 +378,7 @@ p37 = parse('', ['p=6p=4p=5p=8p=6p=2p=3p=2c', ('P6P0', 1), (1, 'P3P0P2P0Pxc'), (
 p3A = parse('w', 'Kwc3|C2w|WkWkWkCc|KwWkOww|WkKw|WWW$|CxKwKwKkWwCo', 15)
 p3B = parse('p4', [('Pp=0WwPp=0Oo=0Pp=0PoO', 0), 'PoPp=0o|OoOp|PpWow|Ow=0Www|WW$'], 14)
 p3C = parse('c15', 'O2C4c=27C2C2|O2c4c4c4|O2c4O0c8C4|O2c4C4c12C8|O2C4C4|O2O0O2O0c4O6|o4O0o4O0o16O0o8O0C|O2C4C4c4Ox|C0C0$', 17) #Takes a long time (8.2 min)
-p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0$|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')], 11) #Takes a while (1 min)
+p3D = parse('m3o24', ['W3w6W3O5|WRKm=0O0W0K0$|W3k15O4K4w2|m=0K3W3O|m=0K3O3k6', ('K4m=0O3K3', 1), (1, 'WK3O2|WO6|W4w8')], 11) #Takes a bit (0.5 min)
 
 p41 = parse('mw6', '!O0O2w2|OOp4!P4o2w2|W2W2o2P2P2r|!W3!W3R$', 7)
 p42 = parse('g5p3', ['@G0@G0$|@P3g|P3G3', ('@P0', 1), (1, 'G@P2p6G5|G2p2P3g5')], 12)
@@ -400,9 +399,9 @@ p54 = parse('', ['W2W2W4|W2W2W6p2|n8N0C0mM0C0OOKKPP$', ('c7', 1), (1, 'C5o2|C0C2
 p55 = parse('k10', ['K4|N2k25|K2n10K5N6|K2N4|K3K2', ('K0K12', 1), (1, 'N2K4|N2n15|K6n15K6|K0K2K0K0$')], 14)
 p56 = parse('u4', ['U2m4U3n5O5O5u4', ('C2M2uU4m', 1), (1, 'KCm|O6c6|BxOPCu|U$|C4n2|C2n2')], 12)
 p57 = parse('', 'c30|n20|u10|K24U$|U3C6C2N0C3C3Cxk8|U3C2N3C12NN0Ck8|U3C5N5CxC2N2k8|U3C0C8C6CxCk8', 13)
-p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC$')], 8) #Takes a while (1.2 min)
+p5A = parse('m5', ['W2CPO2n2|O2o|O2o|W2w2|Wp|Wp|Wc|Wc', ('Mxw2', 1), (1, 'WWc2|WWp2|WWo|OOP4CC$')], 8) #Takes a bit (0.5 min)
 p5B = parse('m2', ['B3g8w4U3m2U2', ('W4', 2), (2, 'G2u9k12Mg2Gx'), (2, 'u=5', 4), (4, 'UU0gK4'), (4, 'RxKK6', 5),
-    (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0$')], 23) #Takes a while (2.5 min), uses special logic
+    (5, 'G4U2w5'), (5, 'C3@U0K4m8g=2', 6), (6, 'W2G3M2u|K6G0W0u'), (6, 'K3W5W0@K0PG0W', 7), (7, 'G2@G0u|U2W2u2|U3U0$')], 23) #Takes a while (1.9 min), uses special logic
 
 p61 = parse('', [('c-5c9c-4c-4|c-2c4c4c-2|c2c3c-8c3c4c-4|c-1c-1c-2c7c-1c-1', 1), (1, 'C24$|c-1c-2c-3c8|c-2c3c-4c3|c-6c2c2c')], 8) #Takes a while (3.8 min)
 p62 = parse('', [('O-2c4o-2|C2o5|o-4O-5$'), ('O-3o-2C4c-4O-2o4', 1), (1, 'C-2o-5|O8|C-2o-2|C-2o3|C-2c2')], 9)
@@ -431,7 +430,7 @@ p710 = parse('m3b-5o8c9', ['M/C0M/O0M/B0$|B-3B4O/B5|B-xC-2#C3|CO4M/B-1b5B2O/B3C3
 p7A = parse('p4', 'P/C-xC/Px|C-4P/C-xP/C-x|P24P/C-x|P2C/Px|PC/Px|P8C/PxP/C-xC/Px|PxP/C-x|C-xC/Px|C-2P/C-x|P256$', 10) #Max possible score is 568
 p7B = parse('o4', 'n17|N-3!N0$|N/O5u7O-4r|O/N8o-R2|O4r-2R2o=4|N!N-1|U/R-1UU0r2r=0N/O4|U/R-1U2U0r-r=0N/U7', 10)
 p7C = parse('m1m*', 'U3@C-8$|G/PC2G/P-1G/PN3G/P2P-3P2p-u|P-4P/G2G-5G/PP2W4pu|RP/G-2G/P-4P/G-1G-4G/P-4G/P-1p-4u', 6)
-p7D = parse('', ['!W12$|C2C0O2w2|KC2Ow2|KR2w2|K12', ('o10k10c10', 1), (1, 'NN0K0O0C2w6|NC3KO6|OKk2|C4n13|N/K4rN8w6')], 16) #Takes a bit (0.8 min)
+p7D = parse('', ['!W12$|C2C0O2w2|KC2Ow2|KR2w2|K12', ('o10k10c10', 1), (1, 'NN0K0O0C2w6|NC3KO6|OKk2|C4n13|N/K4rN8w6')], 16) #Takes a bit (0.7 min)
 p7E = parse('', ['c-|o-|p-|cccccccc|oooooooo|pppppppp', ('>', 1), (1, 'W/Cx|W/C-x', 2), (2, 'W/OxW/Ox|W/O-xW/O-x', 3), (3, 'W/PxW/PxW/Px|W/P-xW/P-xW/P-x', 4), 
     (4, 'W17W0', 5), (5, 'W/Px|W/P-x', 6), (6, 'W/CxW/Cx|W/C-xW/C-x', 7), (7, 'W/OxW/OxW/Ox|W/O-xW/O-xW/O-x', 8),
     (8, 'W2W0', 9), (9, 'W/Ox|W/O-x', 10), (10, 'W/PxW/Px|W/P-xW/P-x', 11), (11, 'W/CxW/CxW/Cx|W/C-xW/C-xW/C-x', 12), (12, 'W17W0$')], 18) #Uses special logic
@@ -443,4 +442,4 @@ finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1
 
 LockpickSolver().solve(p7E)
 
-#test()
+#test() #Time: ~100 sec
