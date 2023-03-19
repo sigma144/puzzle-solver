@@ -225,7 +225,10 @@ class LockpickSolver(Solver):
     def check_state(self, state): #Place to add some extra logic
         if not self.special:
             return True
-        if self.special == '2-10':
+        if self.special == '1-B':
+            if state.last_move != 8 and len(state.edges[state.last_move][1]) != 2:
+                return False
+        elif self.special == '2-10':
             prev = state.previous
             if state.last_move in [3, 4] and prev.last_move not in [3, 4]:
                 if len(prev.edges[0][1]) < 2 or prev.stock.get('o', 0) == 0:
@@ -247,18 +250,12 @@ class LockpickSolver(Solver):
             total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
             return total >= 25
         elif self.special == '7-E':
-            if state.last_move == 0 and state.stock.get('c', 0) == 0:
-                return False
-            elif state.last_move == 1 and state.stock.get('o', 0) == 0:
-                return False
-            elif state.last_move == 2 and state.stock.get('p', 0) == 0:
-                return False
-            elif state.last_move == 3 and state.previous.stock.get('c', 0) != 0:
-                return False
-            elif state.last_move == 4 and state.previous.stock.get('o', 0) != 0:
-                return False
-            elif state.last_move == 5 and state.previous.stock.get('p', 0) != 0:
-                return False
+            if state.last_move == 0 and state.stock.get('c', 0) == 0: return False
+            if state.last_move == 1 and state.stock.get('o', 0) == 0: return False
+            if state.last_move == 2 and state.stock.get('p', 0) == 0: return False
+            if state.last_move == 3 and state.previous.stock.get('c', 0) != 0: return False
+            if state.last_move == 4 and state.previous.stock.get('o', 0) != 0: return False
+            if state.last_move == 5 and state.previous.stock.get('p', 0) != 0: return False
         return True
     def check_finish(self, state):
         return state.win
@@ -300,7 +297,7 @@ class LockpickSolver(Solver):
         #print(state)
         self.start = 0
         self.special = None
-        cases = {p210:'2-10', p53:'5-3', p5B:'5-B', p610:'6-10', p7E:'7-E'}
+        cases = {p1B: '1-B', p210:'2-10', p53:'5-3', p5B:'5-B', p610:'6-10', p7E:'7-E', finale:'finale'}
         if state in cases:
             self.special = cases[state]
         target = state.target_moves
@@ -349,8 +346,7 @@ p18 = parse('w2', 'O3w4|W2ow3|W6$|O2w2|W2o2w', 4)
 p19 = parse('w16', [('W2W3W2W3W|WW6WW|W4WW2W3', 1), (1, 'W3W2W3$|W2W3W2$', 2)], 2)
 p110 = parse('p16o8g4c2', ['W6$|O4w|G2C2w', ('WP4wGP2O2|GP2wGO2', 0), 'P6O2c2|C3Gw|P6w|G2C2w|CCw'], 8) #Takes a bit (0.5 min)
 p1A = parse('k', ['PwWcPc', ('KkOpP|OpWwC|KoPkK', 1), (1, 'p|PpOw|OoWp|CoKoWwK$')], 19)
-p1B = parse('w5o2p3g4k2', [('PPcGG|WKcWW|WKcPG|GWcOK|WWcGW|OOcOK|GPcWP|GOcWO', 0), 'C8$'], 9) #Timeout
-p1Ba = parse('w5o2p3g4k2', [('PP|GG', 1), (1, 'WK|WW', 2), (2, 'WK|PG', 3), (3, 'GW|OK', 4), (4, 'WW|GW', 5), (5, 'OO|OK', 6), (6, 'GP|WP', 7), (7, 'GO$|WO$')], 8)
+p1B = parse('w5o2p3g4k2', [('PPcGG|WKcWW|WKcGP|GWcKO|WWcWG|OOcKO|GPcPW|GOcOW', 0), 'C8$'], 9) #Uses special logic
 p1C = parse('w2', 'WkKoOcCw|WpPcCkKw|WgGkKpPw|WoOpPgGw|WcCgGoOw|P2p2K2k2C2c2O2$', 15)
 
 p21 = parse('m', [('W', 1), (1, 'mw'), (1, 'WP', 2), (2, 'W2w2|Wm|m|W2W$')], 7)
