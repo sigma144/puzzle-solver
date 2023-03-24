@@ -34,6 +34,46 @@ class LockpickState:
         for e in self.edges:
             s += str(e[0]) + '-' + ''.join(str(e[1])) + '-' + str(e[2]) + '\n'
         return s
+    def can_open(self, color, num):
+        stock = self.stock
+        req = color[-1].lower()
+        if num == '0': return stock.get(req, 0) == 0
+        elif num == 'x': return stock.get(req, 0) > 0
+        elif num == '-x': return stock.get(req, 0) < 0
+        elif int(num) < 0: return stock.get(req, 0) <= int(num)
+        else: return stock.get(req, 0) >= int(num)
+    def spend_amount(self, color, num):
+        stock = self.stock
+        req = color[-1].lower()
+        if num == '0': return 0
+        elif num[-1] == 'x': return stock[req]
+        else: return int(num)
+    def open(self, i, si, aura, sign=1):
+        seq = self.edges[i][1]
+        color = seq[si][1]; num = seq[si][2]
+        if 'X' in num:
+            num, stacks = num.split('X')
+            if sign is None:
+                sign = -1 if int(stacks) < 0 else 1
+            stacks = int(stacks) - sign
+            if stacks == 1:
+                seq[si] = (aura, color, num)
+                self.terminate = True
+                return
+            if stacks != 0:
+                seq[si] = (aura, color, num + 'X' + str(stacks))
+                self.terminate = True
+                return
+        elif sign == -1:
+            seq[si] = (aura, color, num + 'X2')
+            self.terminate = True
+            return
+        seq.pop(si)
+        if len(seq) == 0:
+            new_access = self.edges[i][0] if si == -1 else self.edges[i][2]
+            if new_access is not None:
+                self.access = set(self.access)
+                self.access.add(new_access)
     def unlock(self, i, back=False):
         state = LockpickState(self.access, self.stock, self.edges)
         if self.last_move == i and self.last_access == back and not self.terminate:
@@ -43,27 +83,30 @@ class LockpickState:
         next_states = []
         stock = state.stock
         state.edges[i] = (state.edges[i][0], state.edges[i][1][:], state.edges[i][2])
-        start, seq, end = state.edges[i]
+        seq = state.edges[i][1]
         if len(seq) == 0:
             return []
         si = -1 if back else 0
-        lock = seq.pop(si)
+        lock = seq[si]
         aura, color, num = lock
+        #specials
         if aura == '$':
             state.win = True
+            state.open(i, si, aura)
             return [state]
         elif aura == '>':
             if back: return []
+            state.open(i, si, aura)
             state.access = set(state.access)
-            state.access.remove(start)
-            if not seq: state.access.add(end)
+            state.access.remove(state.edges[i][0])
             return [state]
         elif aura == '<':
             if not back: return []
+            state.open(i, si, aura)
             state.access = set(state.access)
-            state.access.remove(end)
-            if not seq: state.access.add(start)
+            state.access.remove(state.edges[i][2])
             return [state]
+        #Auras
         if stock.get('r', 0) >= 1 and '!' in aura:
             aura = aura.replace('!', '')
         if stock.get('g', 0) >= 5 and '@' in aura:
@@ -78,94 +121,57 @@ class LockpickState:
         if aura != lock[0] and not (aura.replace('~', '') == lock[0] and lock[2] != '0' and 'M' not in lock[1]):
             s = LockpickState(state.access, state.stock, state.edges)
             s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
-            if back: s.edges[i][1].append((aura, color, num))
-            else: s.edges[i][1].insert(0, (aura, color, num))
+            s.edges[i][1][si] = (aura, color, num)
             s.last_move = i
             s.last_access = back
             s.master = state.master
             next_states.append(s)
-        if '~' in aura:
-            color = 'N'
         if aura.replace('~', ''):
             return next_states
+        if '~' in aura:
+            color = 'N'
+        stacks = 1
+        if 'X' in num:
+            num, stacks = num.split('X')
+            stacks = int(stacks)
         if not num: num = '1'
-        oldaccess = state.access
-        if len(seq) == 0:
-            toadd = start if back else end
-            if toadd is not None:
-                state.access = set(state.access)
-                state.access.add(start if back else end)
+        #Keys
         if color.islower():
             if color + '*' in stock:
-                if num == '-*':
-                    del stock[color + '*']
-                next_states.append(state)
-                return next_states
-            if num[0] == '=':
-                stock[color] = int(num[1:])
-            elif num == '-':
-                stock[color] = -stock.get(color, 0)
-            elif num == '*':
-                stock[color + '*'] = 1
+                if num == '-*': del stock[color + '*']
+            elif num[0] == '=': stock[color] = int(num[1:])
+            elif num == '-': stock[color] = -stock.get(color, 0)
+            elif num == '*': stock[color + '*'] = 1
             elif num != '-*':
-                if color not in stock:
-                    stock[color] = 0
+                if color not in stock: stock[color] = 0
                 stock[color] += int(num)
-        else:
-            req = color[-1].lower()
+                if stock[color] == 0: del stock[color]
+            state.open(i, si, aura)
+            return next_states + [state]
+        #Master Key
+        master = stock.get('m', 0)
+        if master: master = 1 if master > 0 else -1
+        if master and 'U' not in color and 'M' not in color:
+            s = LockpickState(state.access, state.stock, state.edges)
+            s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
+            s.master = state.master[:] + [len(seq)-1]
+            s.last_move = i
+            s.last_access = back
+            s.open(i, si, aura, master)
+            if 'm*' not in s.stock:
+                s.stock['m'] -= master
+            if s.stock['m'] == 0:
+                del s.stock['m']
+            next_states.append(s)
+        #Doors
+        if state.can_open(color, num):
             key = color[0].lower()
-            stacks = 1
-            if 'X' in num:
-                num, stacks = num.split('X')
-                stacks = int(stacks)
-            master = stock.get('m', 0)
-            if master: master = 1 if master > 0 else -1
-            if master and 'U' not in color and 'M' not in color:
-                s = LockpickState(state.access, state.stock, state.edges)
-                s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
-                s.master = state.master[:] + [len(seq)]
-                s.last_move = i
-                s.last_access = back
-                if stacks != master:
-                    nlock = aura, lock[1], num + 'X' + str(stacks - master)
-                    if back: s.edges[i][1].append(nlock)
-                    else: s.edges[i][1].insert(0, nlock)
-                    s.access = oldaccess
-                    s.terminate = True
-                if 'm*' not in s.stock:
-                    s.stock['m'] -= master
-                if s.stock['m'] == 0:
-                    del s.stock['m']
-                next_states.append(s)
-            if stacks > 0: stacks -= 1
-            else: stacks += 1
-            if abs(stacks) > 0:
-                nlock = aura, lock[1], num + 'X' + str(stacks)
-                if back: seq.append(nlock)
-                else: seq.insert(0, nlock)
-                state.terminate = True
-            if num == 'x':
-                if stock.get(req, 0) < 1:
-                    return next_states
-                if key + '*' not in stock:
-                    stock[key] = stock.get(key, 0) - stock[req]
-            elif num == '-x':
-                if stock.get(req, 0) > -1:
-                    return next_states
-                if key + '*' not in stock:
-                    stock[key] = stock.get(key, 0) - stock[req]
-            elif num == '0':
-                if stock.get(req, 0) != 0:
-                    return next_states
-            elif int(num) > 0 and stock.get(req, 0) < int(num):
-                return next_states
-            elif int(num) < 0 and stock.get(req, 0) > int(num):
-                return next_states
-            elif key + '*' not in stock:
-                stock[key] = stock.get(key, 0) - int(num)
-            if key in stock and stock[key] == 0:
-                del stock[key]
-        next_states.append(state)
+            if key + '*' not in stock:
+                if key not in stock: stock[key] = 0
+                stock[key] -= state.spend_amount(color, num)
+                if stock[key] == 0: del stock[key]
+            state.open(i, si, aura, None)
+            next_states.append(state)
         return next_states
 
 def parse(stock, edges, target_moves=None):
@@ -296,7 +302,7 @@ class LockpickSolver(Solver):
         return True
     def check_finish(self, state):
         return state.win
-    def print_moves(self, moves):
+    def print_moves(self, moves, verbose):
         red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
         for i, m in enumerate(moves):
             if i == 0: continue
@@ -331,8 +337,8 @@ class LockpickSolver(Solver):
                     else:
                         print(black + lock[0] + lock[1] + lock[2], end=' ')
             print(black)
-            #print(m)
-    def solve(self, state, prnt=True):
+            if verbose: print(m)
+    def solve(self, state, debug=False, print_moves=True, verbose=False):
         #print(state)
         self.start = 0
         self.special = None
@@ -340,17 +346,18 @@ class LockpickSolver(Solver):
         if state in cases:
             self.special = cases[state]
         target = state.target_moves
-        #moves = self.solve_optimal_debug(state)
-        moves = self.solve_optimal(state, prnt=False)
+        if debug: moves = self.solve_optimal_debug(state)
+        else: moves = self.solve_optimal(state, prnt=False)
         red, green, black = '\033[91m', '\033[92m', '\033[00m'
         if moves and target and len(moves)-1 > target:
             print(red, moves[0], 'Len', len(moves)-1, 'exceeded target of ', target, black)
         if moves and target and len(moves)-1 < target:
             print(green, moves[0], 'Target beaten! New target:', len(moves)-1, black)
-        if prnt:
-            self.print_moves(moves)
+        if print_moves:
+            self.print_moves(moves, verbose)
+        return moves
 
-def test():
+def test(full=False):
     solver = LockpickSolver()
     tests = [
         p11, p21, p31, p41, p51,      p71, p81,
@@ -367,10 +374,16 @@ def test():
              p2B, p3B, p4B,      p6B,      p8B,
         p1C, p2C,                p6C,
              p2D]
+    if full:
+        tests += [p23, p44, p77, p87, p69, p79, p110, p710,
+        p5A, p6A, p7A, p8A, p1B, p5B, p7B, p7C, p3D, p7D]
+    #Exclude 3C, 48, 4C, 61
     start_time = time.time()
     for i, puzzle in enumerate(tests):
             print('Test', str(i+1)+'/'+str(len(tests)))
-            sol = solver.solve(puzzle, prnt=False)
+            sol = solver.solve(puzzle, print_moves=False)
+            if len(sol)-1 != puzzle.target_moves:
+                return
     elapsed = time.time() - start_time
     print("Test Complete in {:.2f} seconds.".format(elapsed))
 
@@ -487,4 +500,4 @@ finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1
 
 LockpickSolver().solve(p8B)
 
-#test() #Time: ~108 sec
+#test(full=False) #Time: ~102 sec
