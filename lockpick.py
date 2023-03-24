@@ -302,7 +302,7 @@ class LockpickSolver(Solver):
         return True
     def check_finish(self, state):
         return state.win
-    def print_moves(self, moves, verbose):
+    def print_moves(self, moves, verbose=False):
         red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
         for i, m in enumerate(moves):
             if i == 0: continue
@@ -329,13 +329,13 @@ class LockpickSolver(Solver):
                         color = black if c in aura else red
                         print(color + c, end='')
                     if masterloc in m.master:
-                        print(yellow + lock[0] + lock[1] + lock[2], end=' ')
+                        print(yellow + lock[1] + lock[2], end=' ')
                     elif lock[2] != next_lock[2]:
-                        print(red + lock[0] + lock[1] + lock[2] + black, end=' ')
+                        print(red + lock[1] + lock[2] + black, end=' ')
                     elif lock[1] != next_lock[1]:
-                        print(green + lock[0] + lock[1] + lock[2] + black, end=' ')
+                        print(green + lock[1] + lock[2] + black, end=' ')
                     else:
-                        print(black + lock[0] + lock[1] + lock[2], end=' ')
+                        print(black + lock[1] + lock[2], end=' ')
             print(black)
             if verbose: print(m)
     def solve(self, state, debug=False, print_moves=True, verbose=False):
@@ -357,7 +357,24 @@ class LockpickSolver(Solver):
             self.print_moves(moves, verbose)
         return moves
 
-def test(full=False):
+def practice():
+    solver = LockpickSolver()
+    tests = [
+        #p11, p12, p13, p14, p15, p16, p17, p18, p19, p110, p1A, p1B, p1C,
+        #p21, p22, p23, p24, p25, p26, p27, p28, p29, p210, p2A, p2B, p2C, p2D,
+        #p31, p32, p33, p34, p35, p36, p37, p3A, p3B, p3C, p3D,
+        #p41, p42, p43, p44, p45, p46, p47, p4A, p4B, 
+        #p51, p52, p53, p54, p55, p56, p57, p5A, p5B,
+        #p62, p63, p64, p65, p66, p67, p68, p69, p610, p6A, p6B, p6C,
+        #p71, p72, p73, p74, p75, p76, p77, p78, p710, p7A, p7B, p7C, p7D, p7E,
+        #p81, p82, p83, p84, p85, p86, p87, p8A, p8B,
+        ]
+    for i, puzzle in enumerate(tests):
+        sol = solver.solve(puzzle, print_moves=False)
+        input()
+        solver.print_moves(sol)
+
+def test(full=False, print_moves=False):
     solver = LockpickSolver()
     tests = [
         p11, p21, p31, p41, p51,      p71, p81,
@@ -381,7 +398,7 @@ def test(full=False):
     start_time = time.time()
     for i, puzzle in enumerate(tests):
             print('Test', str(i+1)+'/'+str(len(tests)))
-            sol = solver.solve(puzzle, print_moves=False)
+            sol = solver.solve(puzzle, print_moves=print_moves)
             if len(sol)-1 != puzzle.target_moves:
                 return
     elapsed = time.time() - start_time
@@ -500,4 +517,5 @@ finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1
 
 LockpickSolver().solve(p8B)
 
-#test(full=False) #Time: ~102 sec
+#test(full=False, print_moves=False) #Time: ~102 sec
+#practice()
