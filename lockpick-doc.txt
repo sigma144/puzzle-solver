@@ -30,7 +30,7 @@ w=5     Exact key
 w-5     Negative key
 w-      Signflip key
 w*      Star Key
-w-*     Open Star Key
+w-*     Unstar Key
 
 Doors:
 W       Single door
@@ -39,6 +39,7 @@ W0      Blank door
 Wx      Blast door
 W-5     Negative door
 W/R     Bi-colored door (white outside, red inside)
+WX2     Stacked door
 
 Auras (place before door):
 !   Ice (1 red needed)

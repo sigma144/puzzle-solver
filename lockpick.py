@@ -16,8 +16,6 @@ class LockpickState:
             return False
         return self.edges == state.edges
     def __hash__(self):
-        #return hash(str(self.edges))
-        #return hash(str(self.edges)) + len(self.stock)
         return hash((str(self.edges), str(sorted([(k, v) for k, v in self.stock.items()]))))
     def __repr__(self) -> str:
         s = 'Access:' + str(self.access) + '\n'
@@ -90,17 +88,17 @@ class LockpickState:
         lock = seq[si]
         aura, color, num = lock
         #specials
-        if aura == '$':
+        if color == '$':
             state.win = True
             state.open(i, si, aura)
             return [state]
-        elif aura == '>':
+        elif color == '>':
             if back: return []
             state.open(i, si, aura)
             state.access = set(state.access)
             state.access.remove(state.edges[i][0])
             return [state]
-        elif aura == '<':
+        elif color == '<':
             if not back: return []
             state.open(i, si, aura)
             state.access = set(state.access)
@@ -206,25 +204,7 @@ def parse(stock, edges, target_moves=None):
         for s in seq:
             if '$' in s:
                 end = True
-            parse = re.findall(r"[!#@]*[a-zA-Z]/[a-zA-Z]-?x|[!#@]*[a-zA-Z]-?x|[!#@]*[a-z]=-?\d*|[!#@]*[a-z]-?\*|[!#@]*[a-zA-Z]/[a-zA-z]-?\d*|[!#@]*[a-zA-Z]-?\dX-?\d*|[!#@]*[a-zA-Z]-?\d*|>|<|\$", s)
-            for i, lock in enumerate(parse):
-                if lock in '<>$':
-                    parse[i] = (lock, '', '')
-                    continue
-                aura = color = num = None
-                ai = 0
-                for i2, c in enumerate(lock):
-                    if aura is None and c.isalpha():
-                        aura = lock[:i2]
-                        ai = i2
-                    if aura is not None and not c.isalpha() and c != '/' or c == 'x':
-                        color = lock[ai:i2]
-                        num = lock[i2:]
-                        break
-                if num is None:
-                    color = lock[ai:]
-                    num = ''
-                parse[i] = (aura, color, num)
+            parse = re.findall(r'([!#@]*)([a-wyzA-WYZ$<>](?:/[A-WYZ])?)(-?\d+X-?\d+|-?x|=?-?\*?\d*)', s)
             state.edges.append((a, parse, b))
     if not end:
         print(state)
@@ -333,7 +313,7 @@ class LockpickSolver(Solver):
                     elif lock[2] != next_lock[2]:
                         print(red + lock[1] + lock[2] + black, end=' ')
                     elif lock[1] != next_lock[1]:
-                        print(green + lock[1] + lock[2] + black, end=' ')
+                        print(blue + lock[1] + lock[2] + black, end=' ')
                     else:
                         print(black + lock[1] + lock[2], end=' ')
             print(black)
@@ -360,14 +340,14 @@ class LockpickSolver(Solver):
 def practice():
     solver = LockpickSolver()
     tests = [
-        #p11, p12, p13, p14, p15, p16, p17, p18, p19, p110, p1A, p1B, p1C,
-        #p21, p22, p23, p24, p25, p26, p27, p28, p29, p210, p2A, p2B, p2C, p2D,
-        #p31, p32, p33, p34, p35, p36, p37, p3A, p3B, p3C, p3D,
-        #p41, p42, p43, p44, p45, p46, p47, p4A, p4B, 
-        #p51, p52, p53, p54, p55, p56, p57, p5A, p5B,
-        #p62, p63, p64, p65, p66, p67, p68, p69, p610, p6A, p6B, p6C,
-        #p71, p72, p73, p74, p75, p76, p77, p78, p710, p7A, p7B, p7C, p7D, p7E,
-        #p81, p82, p83, p84, p85, p86, p87, p8A, p8B,
+        p11, p12, p13, p14, p15, p16, p17, p18, p19, p110, p1A, p1B, p1C,
+        p21, p22, p23, p24, p25, p26, p27, p28, p29, p210, p2A, p2B, p2C, p2D,
+        p31, p33, p34, p35, p36, p37, p3A, p3B, p3D,
+        p41, p42, p43, p44, p45, p46, p47, p4A, p4B, 
+        p51, p52, p53, p54, p55, p56, p57, p5A, p5B,
+        p62, p63, p64, p65, p66, p67, p68, p69, p610, p6A, p6B, p6C,
+        p71, p72, p73, p74, p75, p76, p77, p78, p710, p7A, p7B, p7C, p7D, p7E,
+        p81, p82, p83, p84, p85, p86, p87, p8A, p8B,
         ]
     for i, puzzle in enumerate(tests):
         sol = solver.solve(puzzle, print_moves=False)
@@ -397,12 +377,15 @@ def test(full=False, print_moves=False):
     #Exclude 3C, 48, 4C, 61
     start_time = time.time()
     for i, puzzle in enumerate(tests):
-            print('Test', str(i+1)+'/'+str(len(tests)))
-            sol = solver.solve(puzzle, print_moves=print_moves)
-            if len(sol)-1 != puzzle.target_moves:
-                return
+        print('Test', str(i+1)+'/'+str(len(tests)))
+        sol = solver.solve(puzzle, print_moves=print_moves)
+        if len(sol)-1 != puzzle.target_moves:
+            print('\033[91m')
+            print(puzzle)
+            print('Solve Failed, test terminated\033[00m')
+            return
     elapsed = time.time() - start_time
-    print("Test Complete in {:.2f} seconds.".format(elapsed))
+    print("\033[92mTest Complete in {:.2f} seconds.\033[00m".format(elapsed))
 
 p11 = parse('w', 'Wo|Op|P$', 3)
 p12 = parse('w', 'Wo|WwO$', 3)
@@ -515,7 +498,7 @@ finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1
     (8, 'P0B@O0u'), (8, 'k31O0O0M0m', 9), (9, 'RN-3B0g-5'), (9, 'K4w2P-1@C@C|BG12Pn-99C', 10), (10, 'O0b2u'), (9, 'WWC4o=1M0m2', 11), (11, 'C0WOxKW0|PPC-12O0W0P-1P-1', 12),
     (12, 'r-RGxWc-u'), (12, 'R0W0M0', 13), (13, 'o=1!W0G-xC0C0u|m5U10M0O0K0R0G0B0n92N0$')]) #Put in for kicks and giggles, I highly doubt it will solve this!
 
-LockpickSolver().solve(p8B)
-
 #test(full=False, print_moves=False) #Time: ~102 sec
 #practice()
+
+LockpickSolver().solve(p8B)
