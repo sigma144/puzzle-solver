@@ -2,7 +2,7 @@ from math import sqrt
 import time
 
 class Solver:
-    def solve_optimal(self, starting_state, prnt=True): #Implement __hash__ and __eq__ for states
+    def solve_optimal(self, starting_state, prnt=True, diff=True): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
         self.state_queue = []
         starting_state.previous = None
@@ -26,16 +26,26 @@ class Solver:
                         move_list.insert(0, s.previous)
                         s = s.previous
                     if prnt:
-                        for move in move_list:
-                            print(move)
+                        if diff:
+                            strs = [str(m) for m in move_list]
+                            print(strs[0])
+                            for i, m2 in enumerate(strs[1:]):
+                                newstr = ""
+                                m1 = strs[i]
+                                for i2 in range(min(len(m1), len(m2))):
+                                    if m1[i2] == m2[i2]: newstr += m1[i2]
+                                    elif m2[i2] == ' ': newstr += '\033[94m'+m1[i2]+'\033[00m'
+                                    else: newstr += '\033[91m'+m2[i2]+'\033[00m'
+                                if len(m1) > len(m2): newstr += '\033[94m'+m1[len(m2):]+'\033[00m'
+                                if len(m1) < len(m2): newstr += '\033[91m'+m2[len(m1):]+'\033[00m'
+                                print(newstr)
+                        else:
+                            for m in move_list: print(m)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return move_list
             for s in next:
                 if not s in self.prev_states and self.check_state(s):
-                    #if len(self.state_queue) > 10000000:
-                    #    print("State queue max size exceeded, cannot solve.")
-                    #    return
                     self.state_queue.append(s)
                     self.prev_states.add(s)
             if count_iterate == depth_target:
@@ -77,9 +87,6 @@ class Solver:
                     return move_list
             for s in next:
                 if not s in self.prev_states and self.check_state(s):
-                    if len(self.state_queue) > 10000:
-                        print("State queue max size exceeded, cannot solve.")
-                        return []
                     self.state_queue.append(s)
                     self.prev_states.add(s)
         print("No solution exists.")
