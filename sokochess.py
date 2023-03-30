@@ -25,24 +25,24 @@ class SokoChessState:
         next2 = self.get(x2+dx, y2+dy)
         if next == ' ':
             return False
-        elif next == '.':
+        elif next == '-':
             self.set(x2, y2, val)
         elif next == '*':
             self.set(x2, y2, val+'*')
         elif next == 'O':
-            self.set(x2, y2, '.')
-        elif next2 == '.':
+            self.set(x2, y2, '-')
+        elif next2 == '-':
             self.set(x2+dx, y2+dy, next.replace('*', ''))
             self.set(x2, y2, val)
         elif next2 == '*':
-            self.set(x2+dx, y2+dy, next)
+            self.set(x2+dx, y2+dy, next+'*')
             self.set(x2, y2, val)
         elif next2 == 'O':
-            self.set(x2+dx, y2+dy, '.')
+            self.set(x2+dx, y2+dy, '-')
             self.set(x2, y2, val)
         else:
             return False
-        self.set(x, y, ' ' if cracks[y][x] else '.')
+        self.set(x, y, ' ' if cracks[y][x] else '-')
         return True
     def copy_and_push(self, x, y, dx, dy):
         new_state = SokoChessState(self.board)
@@ -56,12 +56,12 @@ class SokoChessState:
         if next == ' ': return None
         new_state = SokoChessState(self.board)
         if next == 'O':
-            new_state.set(x, y, '.')
-            new_state.set(x2, y2, '.')
+            new_state.set(x, y, '-')
+            new_state.set(x2, y2, '-')
         else:
             new_state.set(x, y, next)
             new_state.set(x2, y2, val)
-        if cracks[y][x] and next == '.':
+        if cracks[y][x] and next == '-':
             new_state.set(x, y, ' ')
         return new_state
     def copy_and_slide(self, x, y, dx, dy):
@@ -70,10 +70,10 @@ class SokoChessState:
         val = state.get(x, y)
         next = state.get(x+dx, y+dy)
         while next != ' ':
-            if next == '.':
+            if next == '-':
                 state = SokoChessState(state.board)
                 state.set(x+dx, y+dy, val)
-                state.set(x, y, ' ' if cracks[y][x] else '.')
+                state.set(x, y, ' ' if cracks[y][x] else '-')
                 next_states.append(state)
             else:
                 result = state.copy_and_push(x, y, dx, dy)
@@ -95,7 +95,7 @@ class SokoChessSolver(Solver):
             for x, s in enumerate(row):
                 if s == '@' or x < len(finish_state[y]) and finish_state[y][x] == '@':
                     cracks[y][x] = True
-                    if s == '@': board[y][x] = '.'
+                    if s == '@': board[y][x] = '-'
         starting_state = SokoChessState(board)
         self.finish_state = finish_state
         self.finish_points = []
@@ -110,11 +110,11 @@ class SokoChessSolver(Solver):
         for y, row in enumerate(state.board):
             for x, val in enumerate(row):
                 if val == 'p':
-                    if state.get(x, y-1) == '.':
+                    if state.get(x, y-1) == '-':
                         states.append(state.copy_and_push(x, y, 0, -1))
-                    if state.get(x+1, y-1) not in '. ':
+                    if state.get(x+1, y-1) not in '- ':
                         states.append(state.copy_and_push(x, y, 1, -1))
-                    if state.get(x-1, y-1) not in '. ':
+                    if state.get(x-1, y-1) not in '- ':
                         states.append(state.copy_and_push(x, y, -1, -1))
                 elif val == 'k':
                     for dx, dy in [(1, -2), (1, 2), (-1, 2), (-1, -2)]:
@@ -138,73 +138,73 @@ class SokoChessSolver(Solver):
         return True
 
 ptest, ftest = [
-    'O*.',
+    'O*-',
     '*xp',
     'prp',
     'px*',
-    '.*O',
+    '-*O',
 ],[
-    'p.p',
-    '...',
-    '.r.',
-    '...',
-    'p.p',
+    'p-p',
+    '---',
+    '-r-',
+    '---',
+    'p-p',
 ]
 
 p17, f17 = [
-    '.      .',
-    '.......',
-    ' xxxx.',
-    '......',
-    'p.xxx',
+    '-      -',
+    '-------',
+    ' xxxx-',
+    '------',
+    'p-xxx',
     '   bb',
 ],[
-    '.      b',
-    '......p',
-    ' xxxx.',
-    '......',
-    '..xxb',
-    '   ..',
+    '-      b',
+    '------p',
+    ' xxxx-',
+    '------',
+    '--xxb',
+    '   --',
 ]
 
 p32, f32 = [
-    '      .',
-    '    .xr',
-    '  . .',
-    ' ..*.',
-    '. @@',
-    ' b*p.',
+    '      -',
+    '    -xr',
+    '  - -',
+    ' --*-',
+    '- @@',
+    ' b*p-',
     '  r',
 ],[
-    '      .',
-    '    .x.',
-    '  r .  ',
-    ' r.*.  ',
+    '      -',
+    '    -x-',
+    '  r -  ',
+    ' r-*-  ',
     'p @@   ',
-    ' .*.b  ',
-    '  .    ',
+    ' -*-b  ',
+    '  -    ',
 ]
 
 p31, f31 = [ #Fail on timeout
     'Ox@@',
-    '. @ ',
+    '- @ ',
     '@@k@',
     '@ @@',
     '@ @q',
     '@@k@',
-    '. @ ',
+    '- @ ',
     'Ox@@',
 ],[
     'k@@@',
-    '. @ ',
+    '- @ ',
     '@@@@',
     '@ @q',
     '@ @@',
     '@@@@',
-    '. @ ',
+    '- @ ',
     'k@@@',
 ]
 
 
 
-SokoChessSolver().solve(p17, f17)
+SokoChessSolver().solve(p32, f32)
