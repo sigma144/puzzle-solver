@@ -2,7 +2,7 @@ from math import sqrt
 import time
 
 class Solver:
-    def solve_optimal(self, starting_state, prnt=True, diff=True): #Implement __hash__ and __eq__ for states
+    def solve_optimal(self, starting_state, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
         self.state_queue = []
         starting_state.previous = None
@@ -34,9 +34,9 @@ class Solver:
                                 m1 = strs[i]
                                 for i2 in range(min(len(m1), len(m2))):
                                     if m1[i2] == m2[i2]: newstr += m1[i2]
-                                    elif m2[i2] == ' ': newstr += '\033[94m'+m1[i2]+'\033[00m'
+                                    elif m2[i2] == ' ' and diff_trail: newstr += '\033[94m'+m1[i2]+'\033[00m'
                                     else: newstr += '\033[91m'+m2[i2]+'\033[00m'
-                                if len(m1) > len(m2): newstr += '\033[94m'+m1[len(m2):]+'\033[00m'
+                                if len(m1) > len(m2) and diff_trail: newstr += '\033[94m'+m1[len(m2):]+'\033[00m'
                                 if len(m1) < len(m2): newstr += '\033[91m'+m2[len(m1):]+'\033[00m'
                                 print(newstr)
                         else:
