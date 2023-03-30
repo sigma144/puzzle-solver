@@ -2,7 +2,8 @@ from math import sqrt
 import time
 
 class Solver:
-    def solve_optimal(self, starting_state, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
+    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
+        if debug: return self.solve_optimal_debug(starting_state)
         self.prev_states = set()
         self.state_queue = []
         starting_state.previous = None
