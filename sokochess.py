@@ -1,4 +1,5 @@
 from solver import Solver
+from sokochesslevels import *
 
 class SokoChessState:
     def __init__(self, board):
@@ -48,6 +49,7 @@ class SokoChessState:
         new_state = SokoChessState(self.board)
         result = new_state.push(x, y, dx, dy)
         if not result: return None
+        new_state.last_move = (x+dx, y+dy)
         return new_state
     def copy_and_swap(self, x, y, dx, dy):
         x2, y2 = x+dx, y+dy
@@ -63,6 +65,7 @@ class SokoChessState:
             new_state.set(x2, y2, val)
         if cracks[y][x] and next == '-':
             new_state.set(x, y, ' ')
+        new_state.last_move = (x2, y2)
         return new_state
     def copy_and_slide(self, x, y, dx, dy):
         next_states = []
@@ -74,6 +77,7 @@ class SokoChessState:
                 state = SokoChessState(state.board)
                 state.set(x+dx, y+dy, val)
                 state.set(x, y, ' ' if cracks[y][x] else '-')
+                state.last_move = (x+dx, y+dy)
                 next_states.append(state)
             else:
                 result = state.copy_and_push(x, y, dx, dy)
@@ -84,6 +88,31 @@ class SokoChessState:
             val = state.get(x, y)
             next = state.get(x+dx, y+dy)
         return next_states
+    def get_moves(self, x, y):
+        states = []
+        val = self.get(x, y)
+        if val == 'p':
+            if self.get(x, y-1) == '-':
+                states.append(self.copy_and_push(x, y, 0, -1))
+            if self.get(x+1, y-1) not in '- ':
+                states.append(self.copy_and_push(x, y, 1, -1))
+            if self.get(x-1, y-1) not in '- ':
+                states.append(self.copy_and_push(x, y, -1, -1))
+        elif val == 'k':
+            for dx, dy in [(1, -2), (1, 2), (-1, 2), (-1, -2)]:
+                states.append(self.copy_and_swap(x, y, dx, dy))
+                states.append(self.copy_and_swap(x, y, dy, dx))
+        if val == 'b' or val == 'q':
+            states += self.copy_and_slide(x, y, 1, 1)
+            states += self.copy_and_slide(x, y, -1, 1)
+            states += self.copy_and_slide(x, y, 1, -1)
+            states += self.copy_and_slide(x, y, -1, -1)
+        if val == 'r' or val == 'q':
+            states += self.copy_and_slide(x, y, 1, 0)
+            states += self.copy_and_slide(x, y, -1, 0)
+            states += self.copy_and_slide(x, y, 0, 1)
+            states += self.copy_and_slide(x, y, 0, -1)
+        return states
 
 class SokoChessSolver(Solver):
     def solve(self, board, finish_state):
@@ -103,33 +132,16 @@ class SokoChessSolver(Solver):
             for x, val in enumerate(row):
                 if val in 'pkbrq':
                     self.finish_points.append((x, y))
+        starting_state.last_move = (0, 0)
         self.solve_optimal(starting_state)
         #self.solve_optimal_debug(starting_state)
     def get_next_states(self, state):
-        states = []
+        states = state.get_moves(*state.last_move)
         for y, row in enumerate(state.board):
             for x, val in enumerate(row):
-                if val == 'p':
-                    if state.get(x, y-1) == '-':
-                        states.append(state.copy_and_push(x, y, 0, -1))
-                    if state.get(x+1, y-1) not in '- ':
-                        states.append(state.copy_and_push(x, y, 1, -1))
-                    if state.get(x-1, y-1) not in '- ':
-                        states.append(state.copy_and_push(x, y, -1, -1))
-                elif val == 'k':
-                    for dx, dy in [(1, -2), (1, 2), (-1, 2), (-1, -2)]:
-                        states.append(state.copy_and_swap(x, y, dx, dy))
-                        states.append(state.copy_and_swap(x, y, dy, dx))
-                if val == 'b' or val == 'q':
-                    states += state.copy_and_slide(x, y, 1, 1)
-                    states += state.copy_and_slide(x, y, -1, 1)
-                    states += state.copy_and_slide(x, y, 1, -1)
-                    states += state.copy_and_slide(x, y, -1, -1)
-                if val == 'r' or val == 'q':
-                    states += state.copy_and_slide(x, y, 1, 0)
-                    states += state.copy_and_slide(x, y, -1, 0)
-                    states += state.copy_and_slide(x, y, 0, 1)
-                    states += state.copy_and_slide(x, y, 0, -1)
+                if (x, y) == state.last_move:
+                    continue
+                states += state.get_moves(x, y)
         return [s for s in states if s is not None]
     def check_finish(self, state):
         for x, y in self.finish_points:
@@ -151,60 +163,4 @@ ptest, ftest = [
     'p-p',
 ]
 
-p17, f17 = [
-    '-      -',
-    '-------',
-    ' xxxx-',
-    '------',
-    'p-xxx',
-    '   bb',
-],[
-    '-      b',
-    '------p',
-    ' xxxx-',
-    '------',
-    '--xxb',
-    '   --',
-]
-
-p32, f32 = [
-    '      -',
-    '    -xr',
-    '  - -',
-    ' --*-',
-    '- @@',
-    ' b*p-',
-    '  r',
-],[
-    '      -',
-    '    -x-',
-    '  r -  ',
-    ' r-*-  ',
-    'p @@   ',
-    ' -*-b  ',
-    '  -    ',
-]
-
-p31, f31 = [ #Fail on timeout
-    'Ox@@',
-    '- @ ',
-    '@@k@',
-    '@ @@',
-    '@ @q',
-    '@@k@',
-    '- @ ',
-    'Ox@@',
-],[
-    'k@@@',
-    '- @ ',
-    '@@@@',
-    '@ @q',
-    '@ @@',
-    '@@@@',
-    '- @ ',
-    'k@@@',
-]
-
-
-
-SokoChessSolver().solve(p32, f32)
+SokoChessSolver().solve(p5, f5)
