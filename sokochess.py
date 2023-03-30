@@ -91,23 +91,23 @@ class SokoChessState:
     def get_moves(self, x, y):
         states = []
         val = self.get(x, y)
-        if val == 'p':
-            if self.get(x, y-1) == '-':
+        if val == 'P':
+            if self.get(x, y-1) in '-*O':
                 states.append(self.copy_and_push(x, y, 0, -1))
             if self.get(x+1, y-1) not in '- ':
                 states.append(self.copy_and_push(x, y, 1, -1))
             if self.get(x-1, y-1) not in '- ':
                 states.append(self.copy_and_push(x, y, -1, -1))
-        elif val == 'k':
+        elif val == 'N':
             for dx, dy in [(1, -2), (1, 2), (-1, 2), (-1, -2)]:
                 states.append(self.copy_and_swap(x, y, dx, dy))
                 states.append(self.copy_and_swap(x, y, dy, dx))
-        if val == 'b' or val == 'q':
+        if val == 'B' or val == 'Q':
             states += self.copy_and_slide(x, y, 1, 1)
             states += self.copy_and_slide(x, y, -1, 1)
             states += self.copy_and_slide(x, y, 1, -1)
             states += self.copy_and_slide(x, y, -1, -1)
-        if val == 'r' or val == 'q':
+        if val == 'R' or val == 'Q':
             states += self.copy_and_slide(x, y, 1, 0)
             states += self.copy_and_slide(x, y, -1, 0)
             states += self.copy_and_slide(x, y, 0, 1)
@@ -115,26 +115,25 @@ class SokoChessState:
         return states
 
 class SokoChessSolver(Solver):
-    def solve(self, board, finish_state):
+    def solve(self, board, finish_state, debug=False):
         board = [[c for c in row] for row in board]
         board = [row + [' ']*max([len(r)-len(row) for r in board]) for row in board]
         global cracks
         cracks = [[False for _ in row] for row in board]
         for y, row in enumerate(board):
             for x, s in enumerate(row):
-                if s == '@' or x < len(finish_state[y]) and finish_state[y][x] == '@':
+                if s == '!' or x < len(finish_state[y]) and finish_state[y][x] == '!':
                     cracks[y][x] = True
-                    if s == '@': board[y][x] = '-'
+                    if s == '!': board[y][x] = '-'
         starting_state = SokoChessState(board)
         self.finish_state = finish_state
         self.finish_points = []
         for y, row in enumerate(finish_state):
             for x, val in enumerate(row):
-                if val in 'pkbrq':
+                if val in 'PNBRQ':
                     self.finish_points.append((x, y))
         starting_state.last_move = (0, 0)
-        self.solve_optimal(starting_state)
-        #self.solve_optimal_debug(starting_state)
+        self.solve_optimal(starting_state, debug)
     def get_next_states(self, state):
         states = state.get_moves(*state.last_move)
         for y, row in enumerate(state.board):
@@ -145,22 +144,20 @@ class SokoChessSolver(Solver):
         return [s for s in states if s is not None]
     def check_finish(self, state):
         for x, y in self.finish_points:
-            if self.finish_state[y][x] != state.get(x, y):
+            if self.finish_state[y][x] != state.get(x, y).replace('*', ''):
                 return False
+        for y, row in enumerate(state.board):
+            for x, val in enumerate(row):
+                if (x, y) in self.finish_points:
+                    continue
+                if val in 'PNBRQ':
+                    return False
         return True
 
 ptest, ftest = [
-    'O*-',
-    '*xp',
-    'prp',
-    'px*',
-    '-*O',
+
 ],[
-    'p-p',
-    '---',
-    '-r-',
-    '---',
-    'p-p',
+
 ]
 
-SokoChessSolver().solve(p5, f5)
+SokoChessSolver().solve(p23, f23, debug=0)
