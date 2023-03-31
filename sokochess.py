@@ -113,6 +113,16 @@ class SokoChessState:
             states += self.copy_and_slide(x, y, 0, 1)
             states += self.copy_and_slide(x, y, 0, -1)
         return states
+    def update_doors(self):
+        for (x, y), b in gate_map.items():
+            if self.board[y][x] not in '- ':
+                continue
+            for x2, y2 in b:
+                if self.board[y2][x2] != '-':
+                    self.set(x, y, '-')
+                    break
+            else: self.set(x, y, ' ')
+        return True
 
 class SokoChessSolver(Solver):
     def solve(self, board, finish_state, debug=False):
@@ -120,11 +130,19 @@ class SokoChessSolver(Solver):
         board = [row + [' ']*max([len(r)-len(row) for r in board]) for row in board]
         global cracks
         cracks = [[False for _ in row] for row in board]
+        buttons = []
+        gates = []
         for y, row in enumerate(board):
             for x, s in enumerate(row):
                 if s == '!' or x < len(finish_state[y]) and finish_state[y][x] == '!':
                     cracks[y][x] = True
                     if s == '!': board[y][x] = '-'
+                elif s.isnumeric():
+                    if int(s) % 2: gates.append((int(s)-1, (x, y)))
+                    else: buttons.append((int(s), (x, y)))
+                    board[y][x] = '-'
+        global gate_map
+        gate_map = {p: [p2 for k2, p2 in buttons if k == k2] for k, p in gates}
         starting_state = SokoChessState(board)
         self.finish_state = finish_state
         self.finish_points = []
@@ -133,6 +151,7 @@ class SokoChessSolver(Solver):
                 if val in 'PNBRQ':
                     self.finish_points.append((x, y))
         starting_state.last_move = (0, 0)
+        starting_state.update_doors()
         self.solve_optimal(starting_state, debug)
     def get_next_states(self, state):
         states = state.get_moves(*state.last_move)
@@ -141,7 +160,7 @@ class SokoChessSolver(Solver):
                 if (x, y) == state.last_move:
                     continue
                 states += state.get_moves(x, y)
-        return [s for s in states if s is not None]
+        return [s for s in states if s is not None and s.update_doors()]
     def check_finish(self, state):
         for x, y in self.finish_points:
             if self.finish_state[y][x] != state.get(x, y).replace('*', ''):
@@ -160,4 +179,4 @@ ptest, ftest = [
 
 ]
 
-SokoChessSolver().solve(p23, f23, debug=0)
+SokoChessSolver().solve(p32, f32, debug=0)
