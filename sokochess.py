@@ -3,7 +3,7 @@ from sokochesslevels import *
 
 class SokoChessState:
     def __init__(self, board):
-        self.board = [row[:] for row in board]
+        self.board = board[:]
     def __hash__(self):
         return hash(str(self.board))
     def __eq__(self, state):
