@@ -22,6 +22,7 @@ k   Pink
 n   Brown
 m   Master
 u   Pure
+z   Glitch
 
 Keys:
 w       Single key
@@ -42,6 +43,7 @@ W/R     Bi-colored door (white outside, red inside)
 WX2     Stacked door
 [WWW]   Combo door
 R/[WWW] Combo door (red outside)
+W/[]    Lockless door
 
 Auras (place before door):
 !   Ice (1 red needed)

@@ -11,6 +11,7 @@ class LockpickState:
         self.master = []
         self.win = False
         self.terminate = False
+        self.mimic = False
     def __eq__(self, state):
         if self.stock != state.stock:
             return False
@@ -51,6 +52,12 @@ class LockpickState:
             if key not in self.stock: self.stock[key] = 0
             self.stock[key] -= amount
             if self.stock[key] == 0: del self.stock[key]
+    def mimic_color(self, mimic):
+        for i, e in enumerate(self.edges):
+            self.edges[i] = (e[0], e[1][:], e[2])
+            for i2, l in enumerate(self.edges[i][1]):
+                if l[0] and l[0][-1].isalpha() and '~' not in l[0]:
+                    self.edges[i][1][i2] = (l[0][:-1]+mimic, l[1], l[2])
     def open(self, i, si, aura, sign=1):
         seq = self.edges[i][1]
         color = seq[si][1]; num = seq[si][2]
@@ -59,24 +66,27 @@ class LockpickState:
             if sign is None:
                 sign = -1 if int(stacks) < 0 else 1
             stacks = int(stacks) - sign
+            if stack_limit and abs(stacks) > stack_limit:
+                return False
             if stacks == 1:
                 seq[si] = (aura, color, num)
                 self.terminate = True
-                return
+                return True
             if stacks != 0:
                 seq[si] = (aura, color, num + 'X' + str(stacks))
                 self.terminate = True
-                return
+                return True
         elif sign == -1:
             seq[si] = (aura, color, num + 'X2')
             self.terminate = True
-            return
+            return True
         seq.pop(si)
         if len(seq) == 0:
             new_access = self.edges[i][0] if si == -1 else self.edges[i][2]
             if new_access is not None:
                 self.access = set(self.access)
                 self.access.add(new_access)
+        return True
     def unlock(self, i, back=False):
         state = LockpickState(self.access, self.stock, self.edges)
         if self.last_move == i and self.last_access == back and not self.terminate:
@@ -99,15 +109,13 @@ class LockpickState:
             return [state]
         elif color == '>':
             if back: return []
+            state.access = set()
             state.open(i, si, aura)
-            state.access = set(state.access)
-            state.access.remove(state.edges[i][0])
             return [state]
         elif color == '<':
             if not back: return []
+            state.access = set()
             state.open(i, si, aura)
-            state.access = set(state.access)
-            state.access.remove(state.edges[i][2])
             return [state]
         #Auras
         if stock.get('r', 0) >= 1 and '!' in aura:
@@ -117,11 +125,12 @@ class LockpickState:
         if stock.get('b', 0) >= 3 and '#' in aura:
             aura = aura.replace('#', '')
         if stock.get('n', 0) > 0 and color[0].isupper() and \
-            'U' not in color and color != 'N' and '~' not in aura:
+            'U' not in color and color != 'N' and '~' not in aura and \
+                not ('Z' in color and aura[-1] in 'MU'):
             aura = '~'+aura
         elif stock.get('n', 0) < 0 and '~' in aura:
             aura = aura.replace('~', '')
-        if aura != lock[0] and not (aura.replace('~', '') == lock[0] and num != '0' and 'M' not in color):
+        if aura != lock[0] and not (aura.replace('~', '') == lock[0] and num != '0' and 'M' not in color and 'Z' not in color):
             s = LockpickState(state.access, state.stock, state.edges)
             s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
             s.edges[i][1][si] = (aura, color, num)
@@ -129,12 +138,14 @@ class LockpickState:
             s.last_access = back
             s.master = state.master
             next_states.append(s)
-        if aura.replace('~', ''):
+        if '!' in aura or '@' in aura or '#' in aura:
             return next_states
         if '~' in aura:
             if type(color) is list:
                 color = ['N', [(l[0], 'N', l[2]) for l in color[1]]]
             else: color = 'N'
+        elif mimic_color and aura and type(color) is str:
+            color = color.replace('z', aura[-1].lower()).replace('Z', aura[-1])
         stacks = 1
         if 'X' in num:
             num, stacks = num.split('X')
@@ -156,35 +167,40 @@ class LockpickState:
         #Master Key
         master = stock.get('m', 0)
         if master: master = 1 if master > 0 else -1
-        if master and 'U' not in color and 'M' not in color:
+        if master and 'U' not in color and 'M' not in color and not ('Z' in color and aura[-1] in 'MU'):
             s = LockpickState(state.access, state.stock, state.edges)
             s.edges[i] = (s.edges[i][0], s.edges[i][1][:], s.edges[i][2])
             s.master = state.master[:] + [len(seq)-1]
             s.last_move = i
             s.last_access = back
-            s.open(i, si, aura, master)
-            if 'm*' not in s.stock:
-                s.stock['m'] -= master
-            if s.stock['m'] == 0:
-                del s.stock['m']
-            next_states.append(s)
+            if s.open(i, si, aura, master):
+                s.spend_keys('m', master)
+                next_states.append(s)
         #Combo Doors
         if type(color) is list:
             spend = color[0]
+            if spend == 'Z':
+                spend = aura[-1]
             seq = color[1]
             amount = 0
             for lock in seq:
                 _, color, num = lock
                 if not num: num = '1'
+                if 'Z' in color:
+                    color = aura[-1]
                 if not state.can_open(color, num):
                     return next_states
                 amount += state.spend_amount(color, num)
             state.spend_keys(spend.lower(), amount)
+            if mimic_color:
+                state.mimic_color(spend)
         #Regular Doors
         else:
             if not state.can_open(color, num):
                 return next_states
             state.spend_keys(color[0].lower(), state.spend_amount(color, num))
+            if mimic_color:
+                state.mimic_color(color[0])
         state.open(i, si, aura, None)
         next_states.append(state)
         return next_states
@@ -225,16 +241,19 @@ def parse(stock, edges, target_moves=None):
             parse = re.findall(pattern, s)
             for i, lock in enumerate(parse):
                 aura, color, num = lock
+                if 'Z' in color or 'z' in color:
+                    aura = aura+'Z'
+                    parse[i] = (aura, color, num)
+                    state.mimic = True
                 if '[' in color:
                     if '/' in color:
                         spend, color = color.split('/')
                     else:
                         spend = color[1]
                     locks = [spend, re.findall(pattern, color[1:-1])]
-                    if spend != 'M' and any(['M' in l[1] for l in locks[1]]):
-                        locks.append('M')
-                    if spend != 'U' and any(['U' in l[1] for l in locks[1]]):
-                        locks.append('U')
+                    for c in 'MUZ':
+                        if spend != c and any([c in l[1] for l in locks[1]]):
+                            locks.append(c)
                     parse[i] = (aura, locks, num)
             state.edges.append((a, parse, b))
     if not end:
@@ -301,15 +320,6 @@ class LockpickSolver(Solver):
         elif self.special == '8-5':
             if not state.edges[4][1] and state.stock.get('w', 0) == 0 and (not state.edges[3][1] or ('', 'W', '0') in state.edges[3][1]):
                 return False
-        elif self.special == '8-7':
-            if state.edges[0][1] and 'X3' in state.edges[0][1][0][2]: return False
-            if state.edges[1][1] and 'X3' in state.edges[1][1][0][2]: return False
-            if state.edges[2][1] and 'X3' in state.edges[2][1][0][2]: return False
-            if state.edges[3][1] and 'X3' in state.edges[3][1][0][2]: return False
-        elif self.special == '8-A':
-            if state.edges[0][1] and 'X4' in state.edges[0][1][0][1]: return False
-            if state.edges[1][1] and 'X4' in state.edges[1][1][0][1]: return False
-            if state.edges[2][1] and 'X4' in state.edges[2][1][0][1]: return False
         elif self.special == '9-3':
             if state.last_move == 8:
                 return False
@@ -338,6 +348,28 @@ class LockpickSolver(Solver):
                 if state.last_move == i and len(state.edges[i][1]) == 0 and len(state.edges[i2][1]) > 0:
                     state.open(i2, -1, '')
                     return True
+        elif self.special == '10-3':
+            prev = state.previous
+            if state.last_move in [3, 4] and prev.last_move not in [3, 4]:
+                if len(prev.edges[0][1]) < 2 or prev.stock.get(prev.edges[0][1][0][0][-1].lower(), 0) > 0:
+                    return False
+            elif prev.last_move in [3, 4] and state.last_move not in [3, 4, 0]:
+                if prev.stock.get(prev.edges[0][1][0][0][-1].lower(), 0) > 0:
+                    return False
+        elif self.special == '10-6':
+            prev = state.previous
+            if state.last_move == 6 and len(state.edges[6][1]) <= 3 and prev.stock.get('n', 0) > 0:
+                if 'U' not in prev.edges[7][1][0][0] and '~' not in prev.edges[7][1][0][0]:
+                    return False
+        elif self.special == '10-A':
+            prev = state.previous
+            if 0 < state.last_move < 7 and prev.stock.get('n', 0) > 0:
+                if prev.edges[state.last_move-1][1] and '~' not in prev.edges[state.last_move-1][1][0][0]:
+                    return False
+        elif self.special == '10-B':
+            prev = state.previous
+            if state.last_move == 10 and prev.edges[9][1] and prev.edges[9][1][0][2] == '0':
+                return False
         return True
     def check_finish(self, state):
         return state.win
@@ -351,13 +383,15 @@ class LockpickSolver(Solver):
             next = m.edges[m.last_move][1]
             for i2, lock in enumerate(locks):
                 if type(lock[1]) is list:
-                    if lock[1][0] == lock[1][1][0][1]:
+                    if lock[1][1] and lock[1][0] == lock[1][1][0][1]:
                         lock = (lock[0], '['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
                     else:
                         lock = (lock[0], lock[1][0] + '/['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
                 masterloc = i2 if m.last_access else len(locks) - i2 - 1
                 if '~' in lock[0]:
                     lock = (lock[0].replace('~', ''), 'N', lock[2])
+                if lock[0] and lock[0][-1].isalpha():
+                    lock = (lock[0][:-1], lock[1], lock[2])
                 if m.last_access and i2 >= len(next) or \
                  not m.last_access and i2 < len(locks) - len(next):
                     if masterloc in m.master:
@@ -368,6 +402,8 @@ class LockpickSolver(Solver):
                     next_lock = next[i2] if m.last_access else next[i2 + len(next) - len(locks)]
                     if '~' in next_lock[0]:
                         next_lock = (next_lock[0].replace('~', ''), 'N', next_lock[2])
+                    if next_lock[0] and next_lock[0][-1].isalpha():
+                        next_lock = (next_lock[0][:-1], next_lock[1], next_lock[2])
                     aura = next_lock[0]
                     for c in lock[0]:
                         color = black if c in aura else red
@@ -377,7 +413,7 @@ class LockpickSolver(Solver):
                     elif lock[2] != next_lock[2]:
                         print(red + lock[1] + lock[2] + black, end=' ')
                     elif lock[1] != next_lock[1] and type(next_lock[1]) is not list:
-                        print(blue + lock[1] + lock[2] + black, end=' ')
+                        print(blue + next_lock[1] + lock[2] + black, end=' ')
                     else:
                         print(black + lock[1] + lock[2], end=' ')
             print(black)
@@ -387,10 +423,19 @@ class LockpickSolver(Solver):
         self.start = 0
         self.special = None
         cases = {p1B: '1-B', p210:'2-10', p53:'5-3', p5B:'5-B', p610:'6-10', p7E:'7-E',
-            p85:'8-5', p87:'8-7', p8A:'8-A', p93: '9-3', p9B: '9-B', p9C: '9-C', p9E: '9-E', finale:'finale'}
+            p85:'8-5', p93: '9-3', p9B: '9-B', p9C: '9-C', p9E: '9-E',
+            p103:'10-3', p106:'10-6', p10A:'10-A', p10B:'10-B', finale:'finale'}
         if state in cases:
             self.special = cases[state]
+        limit = {p87: 2, p8A: 3, p1010: 2, p10C: 2}
+        global stack_limit
+        if state in limit:
+            stack_limit = limit[state]
+        else:
+            stack_limit = None
         target = state.target_moves
+        global mimic_color
+        mimic_color = state.mimic
         if debug: moves = self.solve_optimal_debug(state)
         else: moves = self.solve_optimal(state, prnt=False)
         red, green, black = '\033[91m', '\033[92m', '\033[00m'
@@ -422,14 +467,14 @@ def practice():
 def test(full=False, print_moves=False):
     solver = LockpickSolver()
     tests = [
-        p11, p21, p31, p41, p51,      p71, p81, p91, 
-        p12, p22,      p42, p52, p62, p72, p82, p92, 
-        p13, p23, p33, p43,      p63, p73, p83,
-        p14, p24, p34, p44, p54, p64, p74, p84, p94,
-        p15, p25, p35, p45, p55, p65, p75, p85, p95,
-        p16, p26, p36, p46, p56, p66, p76, p86, p96,
-        p17, p27, p37, p47, p57, p67,      
-        p18, p28,                p68, p78,
+        p11, p21, p31, p41, p51,      p71, p81, p91, p101,
+        p12, p22,      p42, p52, p62, p72, p82, p92, p102,
+        p13, p23, p33, p43,      p63, p73, p83,      p103,
+        p14, p24, p34, p44, p54, p64, p74, p84, p94, p104,
+        p15, p25, p35, p45, p55, p65, p75, p85, p95, p105,
+        p16, p26, p36, p46, p56, p66, p76, p86, p96, p106,
+        p17, p27, p37, p47, p57, p67,                p107,
+        p18, p28,                p68, p78,           p108,
         p19, p29,                p69, 
              p210,               p610,p710,
         p1A, p2A, p3A, p4A,                     p9A,
@@ -438,8 +483,8 @@ def test(full=False, print_moves=False):
              p2D,                               p9F]
     if full:
         tests += [p23, p44, p77, p87, p69, p79, p110, p710,
-        p5A, p6A, p7A, p8A, p1B, p5B, p9B, p3D, p7D, p9D, p7E]
-    #Exclude 3C, 48, 4C, 61, 93, 9C
+        p5A, p6A, p7A, p8A, p1B, p5B, p9B, p3D, p7D, p9D, p7E, p10B]
+    #Exclude 3C, 48, 4C, 61, 93, 9C, 1010
     start_time = time.time()
     for i, puzzle in enumerate(tests):
         print('Test', str(i+1)+'/'+str(len(tests)))
@@ -554,8 +599,8 @@ p83 = parse('', 'm-13M0o52O0o20O0o15O0o46O0$|O|O3|O9|O27', 36)
 p84 = parse('m', 'U/M0U/N0U/M0U/N0$|M6n|M5mn=1|M5mm-1|n3m11n-2', 10)
 p85 = parse('w16p-8', ['P-2W4M/P-8M-2W/P-4|W2P-4M8W6M0W|M/P-2W5P-2M/W2M0P-1P-1|W0', ('M/P0M/W0', 1), (1, '$')], 10) #Special logic for bridge
 p86 = parse('b', 'BU4M0M/B0M/W0M/C0$|BM0mw12C12bu|BM0C4m2bCc5u|BM0W4m-2bWw5u|BM0m-1c12W12bu', 12)
-p87 = parse('m-1m*c-4', 'P/C-1|P/C-4|K/C-1|K/C-4|C-x>m-*m=1M/KxC/PxM0C-84C0C/KxC/PxC-25C0$', 18) #Takes a bit (0.6 min) w/special logic to limit stacking
-p8A = parse('', 'm-5N/M-5b|c5M/C5b|n5N/C5b|U/M-xU/M0U/M-xU/M0U/M-xU/M0U/M-x#U/N0$', 41) #Takes a while (3.1 min) w/special logic to limit stacking
+p87 = parse('m-1m*c-4', 'P/C-1|P/C-4|K/C-1|K/C-4|C-x>m-*m=1M/KxC/PxM0C-84C0C/KxC/PxC-25C0$', 18) #Special logic to limit stacking
+p8A = parse('', 'm-5N/M-5b|c5M/C5b|n5N/C5b|U/M-xU/M0U/M-xU/M0U/M-xU/M0U/M-x#U/N0$', 41) #Takes a bit (0.6 min) w/special logic to limit stacking
 p8B = parse('', [('w80W8X-2m4', 1), (1, 'W8X-1u|W8u|M2m-6M2m-2M-2m-3M2u|M2m4M-2m5Mxm-4M-2m-u|U4M0M/W0$')], 23)
 
 p91 = parse('', ['B/[KC0O0W]Kx|B/[WCO3K3]Wx|B/[K0W3CO2]Cx|B/[O2C2W4]Ox|cccc|oooo|kkkk|wwww|B-8B-8B-8B/[WO0C2K4]$'], 11)
@@ -569,21 +614,30 @@ p9B = parse('', 'o|o2|o4|o8|o16|o32|o64|o128|c|c2|c4|c8|c16|c32|c64|c128|o256|c2
 p9C = parse('wo3p6k10c15b21m-9', 'W/Bx|B/Cx|C/Kx|K/Px|P/Ox|O/Wx|[BW0M0]|[B0K0C0W0O0P0]$', 26) #Timeout
 p9D = parse('p3u6', 'Uc-|Uc2|Uw|Uc-9|Up-|Up3|Uk-4|Up-4|Uk4|[BxM0][B-xM0]$|UxB/[WP0CK-x]Bxb-4|UxC6PKb-|U[MxMx]|UxB/[K4PxC-x]|Um', 11) #Takes a bit (0.5 min)
 p9E = parse('', ['#U/N0$|[KU0]n90n*[BU0]b-1|k16[KxKx]|b-2[BxBx]|m4[MxMxU0]|b-*[N-xN-xU0]', (0, '[B-xB-x][M2U0][K-xK-x]M-4W/[M0U0]|B2M6B2K17W/[M0U0]', 1), (1, 'K-9|b-*'),
-    (0, 'B2N-8[KU0][K3U0]W/[K0U0]|B-2[NxNxNxNx][K-1U0]K4W/[K0U0]', 2), (2, 'W70|b*')])
+    (0, 'B2N-8[KU0][K3U0]W/[K0U0]|B-2[NxNxNxNx][K-1U0]K4W/[K0U0]', 2), (2, 'W70|b*')]) #Timeout
 p9F = parse('o', 'W3$|{0}{1}{1}{0}{1}{1}{0}{0}{0}{1}{0}{0}{0}{1}w|{0}{0}{0}{1}{0}{0}{1}{0}{0}{0}{1}{1}{0}{0}w|{1}{1}{1}{1}{0}{0}{1}{1}{1}{1}{1}{1}{1}{0}w'.format('[OO]', '[O-1O-1]'), 28)
 
-#p101 = parse('', [('W0z4oOz2', 1), (1, '!C8$|zz8|W6R0C0|O8r|O2z2O4c4|W2w2W4c4')], 9)
-#p102 = parse('w3c2', 'PPZC0$|WoWzOw|WoZpWo|WoWc*Ow|OO0C|WW0C', 9)
-#p103 = parse('', ['w7o6B/[W0O0P0C0]|C0O0P/Z16|O4O0Z', ('c6W/P0', 1), (1, 'OO0Z|p16P0|[ZZZZZZ]W4|WP0|OC/O0')]) #Not trying until I solve
-#p104 = parse('', [('mK0W0k6Z3Z3m2', 1), (1, 'w6|k10|b3|m-2U3[B0W0K0M0]$|WZBZBZu|WZ5K2Ku|BB5Wu')], 17)
-#p105 = parse('', 'B0p3n-4u|P-2n-|Cn*|Z-4|P3b-4u|P-3n-8|p-8P0b3|Z-8|U2U/[B0N0]$') #Edge case (need to fix)
+p101 = parse('', [('W0z4oOz2', 1), (1, '!C8$|zz8|W6R0C0|O8r|O2z2O4c4|W2w2W4c4')], 9)
+p102 = parse('w3c2', 'PPZC0$|WoWzOw|WoZpWo|WoWc*Ow|OO0C|WW0C', 9)
+p103 = parse('', [(1, '[ZZZZZZ]W4|OO0Z|p16P0|WP0|OC/O0'), 'w7o6B/[W0O0P0C0]$|C0O0P/Z16|O4O0Z', ('c6W/P0', 1)], 19) #Bridge special case
+p104 = parse('', [('mK0W0k6Z3Z3m2', 1), (1, 'w6|k10|b3|m-2U3[B0W0K0M0]$|WZBZBZu|WZ5K2Ku|BB5Wu')], 17)
+p105 = parse('', 'B0p3n-4u|P-2n-|Cn*|Z-4|P3b-4u|P-3n-8|p-8P0b3|Z-8|U2U/[B0N0]$', 12) #Preservation
+p106 = parse('w50u-7', ['U-2p*o*w-50|U-2o-7O-1n6|U-2o-4O-6O0P5|U-2p5P6P0O-4|U-2M-1m*n*z50', ('N0', 1), (1, 'W0u-4m-1|Z50$')], 10) #Curse special case
+p107 = parse('', 'N/W6|M/W6|w6n=0|K0k51W/[M0N0U0CZ50]$|[KU0]M6c|[KxU0]c|z-m-', 12)
+p108 = parse('', [('o12O/[]', 1), (1, 'W/[]O/[]C/[]'), (1, 'W/[]', 2), (2, 'U64$|W20u20|Z4Z3u7|z24|z19|z9|Z8Z4Z3u15|O14u14|C8u8')], 15)
+p109 = parse('', ['z17Z0Z0Z0$|Z/[O2P2]m|Z/[W2O2]m|w18O12Z4|p26P8Z16Z4', ('K4W4|C4Z4|>', 1), (1, 'z*'), ('o10O4n10>ZW8P4', 0)]) #Timeout
+p1010 = parse('', 'u4m-1m3M/[OxGxBxRxU0]$|U[Z-xZ-x]|U[ZxZxZx]|UZ/Mx|UZ/U|UZ/[OOOO]|U[NxN-x]|UO/[]R/[]G/[]B/[]|UM/[]N/[]M/[]N/[]', 30) #Takes a long time (4.2 min)
+p10A = parse('', 'Z|Z2|Z4|Z8|Z16|Z32|Z64|B/[M-1U]|uK[M-1U]|C/[M-1U]|m-3nn-2|u-1k43b92c5W/[B0K0C0U0]$') #Curse special case, timeout
+p10B = parse('', [('m-1>|k-1>|c-1>', 1), (1, 'w*', 2), (2, 'm=0Z/W5[Z-5U0]$|n-|Ck*n=0Cw-*|Kc*n=0Kw-*|Mn*k4c4w5|N0|n2')]) #Brown bridge special case
+p10C = parse('c50b-90m-1m*', ['z-b-z-|[C10Zx]|[B-20Z-x]|O/[C0B0U0]$', ('n10n10', 1), (1, 'n20'), (1, 'n10', 2), (2, 'n20'), (2, 'n10', 3), (3, 'n20'), (3, 'n10', 4),
+    (4, 'n20'), (4, 'n10', 5), (5, 'n20'), (5, 'n10', 6), (6, 'n30')]) #Timeout
 
 finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1', 2), (2, 'w', 3), (3, 'Wo=-1o=-1!C!Cg-5u|N-3O-xKWC8u'), (2, 'mWO0O0M0', 4),
     (4, 'K4C2OxBP-6W!O0u'), (4, 'c4w2', 5), (5, '#C2WP-1wG4B0|C2WPk17K12C3', 6), (6, 'ru'), (5, 'm2o=1W0C0C0O0O0O0M0c6b', 7), (7, 'p-'), (7, 'P6w2#O0u'), (7, 'm3K12BP-1w2o=-1', 8),
     (8, 'P0B@O0u'), (8, 'k31O0O0M0m', 9), (9, 'RN-3B0g-5'), (9, 'K4w2P-1@C@C|BG12Pn-99C', 10), (10, 'O0b2u'), (9, 'WWC4o=1M0m2', 11), (11, 'C0WOxKW0|PPC-12O0W0P-1P-1', 12),
     (12, 'r-RGxWc-u'), (12, 'R0W0M0', 13), (13, 'o=1!W0G-xC0C0u|m5U10M0O0K0R0G0B0n92N0$')]) #Put in for kicks and giggles, I highly doubt it will solve this!
 
-#test(full=False, print_moves=False) #Time: ~110 sec
+#test(full=False, print_moves=False) #Time: ~137 sec
 #practice()
 
-LockpickSolver().solve(p9A)
+LockpickSolver().solve(p105, debug=False)
