@@ -30,8 +30,12 @@ w5      Multi-key
 w=5     Exact key
 w-5     Negative key
 w-      Signflip key
-w*      Star Key
-w-*     Unstar Key
+w*      Star key
+w-*     Unstar key
+w5i     Imaginary key
+w2+3i   Complex key
+wxi     Rotor key
+w-xi    Negative Rotor key
 
 Doors:
 W       Single door
@@ -44,6 +48,9 @@ WX2     Stacked door
 [WWW]   Combo door
 R/[WWW] Combo door (red outside)
 W/[]    Lockless door
+W5i     Imaginary door
+W+      Imaginary blast door
+W=      All door
 
 Auras (place before door):
 !   Ice (1 red needed)
