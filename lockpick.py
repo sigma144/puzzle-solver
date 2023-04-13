@@ -1,5 +1,6 @@
 from solver import Solver
 import re, time
+import pickle
 
 class LockpickState:
     def __init__(self, access, stock, edges):
@@ -18,19 +19,13 @@ class LockpickState:
             return False
         return self.edges == state.edges
     def __hash__(self):
-        return hash((str(self.edges), str(sorted([(k, v) for k, v in self.stock.items()]))))
+        return hash(pickle.dumps((sorted([(k, v) for k, v in self.stock.items()]), self.edges), -1))
     def __repr__(self) -> str:
         s = 'Access:' + str(self.access) + '\n'
         s += 'Stock:' + str(self.stock) + '\n'
         s += 'Master:' + str(self.master) + '\n'
         if self.previous:
             s += 'Last move:' + str(self.last_move) + ' ' + str(self.last_access) + '\n'
-            edge = self.edges[self.last_move][1]
-            pedge = self.previous.edges[self.last_move][1]
-            #if self.last_access:
-            #    s += "Last opened: " + str(pedge[len(edge) - len(pedge)]) + '\n'
-            #else:
-            #    s += "Last opened: " + str(pedge[len(pedge) - len(edge) - 1]) + '\n'
         for e in self.edges:
             s += str(e[0]) + '-' + ''.join(str(e[1])) + '-' + str(e[2]) + '\n'
         return s
@@ -748,7 +743,7 @@ finale = parse('m2wp8', [('C2WPg-WOx|KWO-xK12c-12', 1), (1, 'b-u'), ('W0C-2M0o=1
     (8, 'P0B@O0u'), (8, 'k31O0O0M0m', 9), (9, 'RN-3B0g-5'), (9, 'K4w2P-1@C@C|BG12Pn-99C', 10), (10, 'O0b2u'), (9, 'WWC4o=1M0m2', 11), (11, 'C0WOxKW0|PPC-12O0W0P-1P-1', 12),
     (12, 'r-RGxWc-u'), (12, 'R0W0M0', 13), (13, 'o=1!W0G-xC0C0u|m5U10M0O0K0R0G0B0n92N0$')]) #Put in for kicks and giggles, I highly doubt it will solve this!
 
-#test(full=False, print_moves=False) #Time: ~160 sec
+#test(full=False, print_moves=False) #Time: ~115 sec
 #practice()
 
 LockpickSolver().solve(p1111, verbose=False, debug=False)
