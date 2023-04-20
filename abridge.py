@@ -1,3 +1,4 @@
+import pickle
 from solver import Solver
 
 trapsL = trapsR = trapsU = trapsD = []
@@ -8,7 +9,7 @@ class AbridgeState:
         self.tiles_left = sum([sum([val not in ' #*' for val in row]) for row in board])
         self.circles_left = sum([sum([val == 'O' or val == 'F' for val in row]) for row in board])
     def __hash__(self):
-        return hash(str(self.board))
+        return hash(pickle.dumps(self.board))
     def __eq__(self, state):
         return str(self) == str(state)
     def __repr__(self) -> str:
