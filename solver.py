@@ -1,21 +1,22 @@
 from math import sqrt
 import time
+from collections import deque
 
 class Solver:
     def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
         if debug: return self.solve_optimal_debug(starting_state)
-        self.prev_states = set()
-        self.state_queue = []
+        prev_states = set()
+        state_queue = deque()
         starting_state.previous = None
-        self.state_queue = [starting_state]
+        state_queue.append(starting_state)
         count_iterate = 0
         depth = 0
         depth_target = 1
         print("Solving...")
         start_time = time.time()
-        while len(self.state_queue) > 0:
+        while len(state_queue) > 0:
             count_iterate += 1
-            state = self.state_queue.pop(0)
+            state = state_queue.popleft()
             next = self.get_next_states(state)
             for s in next:
                 s.previous = state
@@ -43,28 +44,28 @@ class Solver:
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return move_list
             for s in next:
-                if not s in self.prev_states and self.check_state(s):
-                    self.state_queue.append(s)
-                    self.prev_states.add(s)
+                if not s in prev_states and self.check_state(s):
+                    state_queue.append(s)
+                    prev_states.add(s)
             if count_iterate == depth_target:
                 depth += 1
                 print("Depth " + str(depth) + '...')
-                depth_target = count_iterate + len(self.state_queue)
+                depth_target = count_iterate + len(state_queue)
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
     def solve_optimal_debug(self, starting_state): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
-        self.state_queue = []
+        self.state_queue = deque()
         starting_state.previous = None
-        self.state_queue = [starting_state]
+        self.state_queue.append(starting_state)
         count_iterate = 0
         print("Solving...")
         start_time = time.time()
         while len(self.state_queue) > 0:
             print("QUEUE SIZE:", len(self.state_queue))
-            state = self.state_queue.pop(0)
+            state = self.state_queue.popleft()
             print(Solver.trace_moves(state))
             input()
             next = self.get_next_states(state)
@@ -106,7 +107,6 @@ class Solver:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
         return state
-
     def _solve_recursive(self, state): #Helper function
         result = self.iterate_state(state, depth=self.depth)
         while result == True:
