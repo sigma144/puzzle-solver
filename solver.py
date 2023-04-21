@@ -27,29 +27,12 @@ class Solver:
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
                     move_list = self.trace_moves(s)
-                    if prnt:
-                        if diff:
-                            strs = [str(m) for m in move_list]
-                            print(strs[0])
-                            for i, m2 in enumerate(strs[1:]):
-                                newstr = ""
-                                m1 = strs[i]
-                                for i2 in range(min(len(m1), len(m2))):
-                                    if m1[i2] == m2[i2]: newstr += m1[i2]
-                                    elif m2[i2] == ' ' and diff_trail: newstr += Solver._red+m1[i2]+Solver._black
-                                    else: newstr += Solver._red+m2[i2]+Solver._black
-                                if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
-                                if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
-                                print(newstr)
-                        else:
-                            for m in move_list: print(m)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return move_list
             for s in next:
-                if not s in prev_states and self.check_state(s):
+                if self.check_state(s) and len(prev_states) != (prev_states.add(s) or len(prev_states)):
                     state_queue.append(s)
-                    prev_states.add(s)
             if count_iterate == depth_target:
                 depth += 1
                 elapsed = time.time() - depth_time
@@ -96,11 +79,27 @@ class Solver:
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
     @staticmethod
-    def trace_moves(s):
+    def trace_moves(s, prnt=False, diff=True, diff_trail=False):
         move_list = [s]
         while s.previous is not None:
             move_list.insert(0, s.previous)
             s = s.previous
+        if prnt:
+            if diff:
+                strs = [str(m) for m in move_list]
+                print(strs[0])
+                for i, m2 in enumerate(strs[1:]):
+                    newstr = ""
+                    m1 = strs[i]
+                    for i2 in range(min(len(m1), len(m2))):
+                        if m1[i2] == m2[i2]: newstr += m1[i2]
+                        elif m2[i2] == ' ' and diff_trail: newstr += Solver._red+m1[i2]+Solver._black
+                        else: newstr += Solver._red+m2[i2]+Solver._black
+                    if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
+                    if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
+                    print(newstr)
+            else:
+                for m in move_list: print(m)
         return move_list
     def solve_recursive(self, starting_state, depth=0):
         self.depth = depth
