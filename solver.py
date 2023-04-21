@@ -22,10 +22,7 @@ class Solver:
                 if self.check_finish(s):
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
-                    move_list = [s]
-                    while s.previous is not None:
-                        move_list.insert(0, s.previous)
-                        s = s.previous
+                    move_list = self.trace_moves(s)
                     if prnt:
                         if diff:
                             strs = [str(m) for m in move_list]
@@ -57,7 +54,6 @@ class Solver:
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
-
     def solve_optimal_debug(self, starting_state): #Implement __hash__ and __eq__ for states
         self.prev_states = set()
         self.state_queue = []
@@ -69,7 +65,7 @@ class Solver:
         while len(self.state_queue) > 0:
             print("QUEUE SIZE:", len(self.state_queue))
             state = self.state_queue.pop(0)
-            print(state)
+            print(Solver.trace_moves(state))
             input()
             next = self.get_next_states(state)
             for s in next:
@@ -77,10 +73,7 @@ class Solver:
                 if self.check_finish(s):
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
-                    move_list = [s]
-                    while s.previous is not None:
-                        move_list.insert(0, s.previous)
-                        s = s.previous
+                    move_list = self.trace_moves(s)
                     for move in move_list:
                         print(move)
                     print("Solved in", len(move_list)-1, "moves!")
@@ -94,18 +87,25 @@ class Solver:
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
-
+    @staticmethod
+    def trace_moves(s):
+        move_list = [s]
+        while s.previous is not None:
+            move_list.insert(0, s.previous)
+            s = s.previous
+        return move_list
     def solve_recursive(self, starting_state, depth=0):
         self.depth = depth
         print("Solving...")
         start_time = time.time()
         state = self._solve_recursive(starting_state)
         elapsed = time.time() - start_time
-        if state == None:
+        if state is None:
             print("No solution exists.")
         else:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
+        return state
 
     def _solve_recursive(self, state): #Helper function
         result = self.iterate_state(state, depth=self.depth)
@@ -345,12 +345,13 @@ class GridSolver:
         starting_state.x = starting_state.y = 0
         state = self._solve_recursive(starting_state, depth)
         elapsed = time.time() - start_time
-        if state == None:
+        if state is None:
             print("No solution exists.")
         else:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
         print(f"{self.count_recurse} recursions.")
+        return state
 
     def _solve_recursive(self, state, depth):
         self.count_recurse += 1
