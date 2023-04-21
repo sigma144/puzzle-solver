@@ -3,6 +3,7 @@ import time
 from collections import deque
 
 class Solver:
+    _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
         if debug: return self.solve_optimal_debug(starting_state)
         prev_states = set()
@@ -12,6 +13,8 @@ class Solver:
         count_iterate = 0
         depth = 0
         depth_target = 1
+        depth_time = time.time()
+        depth_last = 0
         print("Solving...")
         start_time = time.time()
         while len(state_queue) > 0:
@@ -33,10 +36,10 @@ class Solver:
                                 m1 = strs[i]
                                 for i2 in range(min(len(m1), len(m2))):
                                     if m1[i2] == m2[i2]: newstr += m1[i2]
-                                    elif m2[i2] == ' ' and diff_trail: newstr += '\033[94m'+m1[i2]+'\033[00m'
-                                    else: newstr += '\033[91m'+m2[i2]+'\033[00m'
-                                if len(m1) > len(m2) and diff_trail: newstr += '\033[94m'+m1[len(m2):]+'\033[00m'
-                                if len(m1) < len(m2): newstr += '\033[91m'+m2[len(m1):]+'\033[00m'
+                                    elif m2[i2] == ' ' and diff_trail: newstr += Solver._red+m1[i2]+Solver._black
+                                    else: newstr += Solver._red+m2[i2]+Solver._black
+                                if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
+                                if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
                                 print(newstr)
                         else:
                             for m in move_list: print(m)
@@ -49,7 +52,11 @@ class Solver:
                     prev_states.add(s)
             if count_iterate == depth_target:
                 depth += 1
-                print("Depth " + str(depth) + '...')
+                elapsed = time.time() - depth_time
+                time_diff = elapsed - depth_last
+                depth_last = elapsed
+                depth_time = time.time()
+                print("Depth "+str(depth)+'...'+"{:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
                 depth_target = count_iterate + len(state_queue)
         print("No solution exists.")
         elapsed = time.time() - start_time
