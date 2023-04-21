@@ -4,21 +4,17 @@ from solver import Solver
 trapsL = trapsR = trapsU = trapsD = []
 
 class AbridgeState:
-    def __init__(self, board):
-        self.board = [row[:] for row in board]
-        self.tiles_left = sum([sum([val not in ' #*' for val in row]) for row in board])
-        self.circles_left = sum([sum([val == 'O' or val == 'F' for val in row]) for row in board])
     def __hash__(self):
         return hash(pickle.dumps(self.board))
     def __eq__(self, state):
-        return str(self) == str(state)
+        return self.board == state.board
     def __repr__(self) -> str:
         return '\n'.join([''.join(row) for row in self.board])
     def set(self, x, y, val):
         self.board[y] = self.board[y][:]
         self.board[y][x] = val
     def copy(self):
-        state = AbridgeState([])
+        state = AbridgeState()
         state.board = self.board[:]
         state.tiles_left = self.tiles_left
         state.circles_left = self.circles_left
@@ -127,7 +123,10 @@ class AbridgeState:
 
 class AbridgeSolver(Solver):
     def solve(self, board):
-        starting_state = AbridgeState(board)
+        starting_state = AbridgeState()
+        starting_state.board = [row[:] for row in board]
+        starting_state.tiles_left = sum([sum([val not in ' #*' for val in row]) for row in board])
+        starting_state.circles_left = sum([sum([val == 'O' or val == 'F' for val in row]) for row in board])
         self.detect_traps(starting_state)
         self.corrupt_states = {}
         #print(trapsD); print(trapsL); print(trapsR); print(trapsU)
@@ -180,7 +179,7 @@ class AbridgeSolver(Solver):
                     states.append(state.copy_and_push(x, y, -1, 0, corrupt=True))
                     states.append(state.copy_and_push(x, y, 1, 0, corrupt=True))
                     states.append(state.copy_and_push(x, y, 0, 1, corrupt=True))
-                    if states[-1] == None and states[-2] == None and states[-3] == None and states[-4] == None:
+                    if states[-1] is None and states[-2] is None and states[-3] is None and states[-4] is None:
                         if (state.board[y-1][x-1] == '#' or state.board[y+1][x+1] == '#') and \
                             (state.board[y+1][x-1] == '#' or state.board[y-1][x+1] == '#'):
                             return []
@@ -237,8 +236,7 @@ class AbridgeSolver(Solver):
                     states.append(state.copy_and_push(x, y, 1, -1, corrupt=True, mirror=True))
                     states.append(state.copy_and_push(x, y, 1, 1, corrupt=True, mirror=True))
         #return [s for s in states if s != None and self.check_corrupt_redundancy(s)]
-        return [s for s in states if s != None]
-        #return [s for s in states if s != None]
+        return [s for s in states if s is not None]
     def detect_traps(self, state):
         global trapsL; trapsL = [[True for _ in row] for row in state.board]
         global trapsR; trapsR = [[True for _ in row] for row in state.board]
@@ -430,7 +428,7 @@ puzzle_invasion = [ #Failed
     ['#','#','#','#','#','#','#','#','#'],
 ]
 
-puzzle_control_panel = [
+puzzle_control_panel = [ #Failed
     ['#','#','#','#','#','#','#','#','#','#','#','#'],
     ['#',' ',' ',' ','#',' ',' ',' ','#','#','#','#'],
     ['#',' ','#',' ',' ',' ','#',' ','#','#','#','#'],
@@ -484,7 +482,7 @@ puzzle_test = [ #Testing
     ['#','#','#','#','#','#','#','#','#'],
 ]
 
-AbridgeSolver().solve(puzzle_a_little_extra)
+AbridgeSolver().solve(puzzle_misdirection)
 
 puzzle_blank = [
     ['#','#','#','#','#','#','#'],
