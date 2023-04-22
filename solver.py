@@ -26,12 +26,13 @@ class Solver:
                 if self.check_finish(s):
                     elapsed = time.time() - start_time
                     #Done solving, print linked list of moves
-                    move_list = self.trace_moves(s)
+                    move_list = self.trace_moves(s, prnt, diff, diff_trail)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return move_list
             for s in next:
                 if self.check_state(s) and len(prev_states) != (prev_states.add(s) or len(prev_states)):
+                #if self.check_state(s) and len(prev_states) != (prev_states.add(hash(s)) or len(prev_states)):
                     state_queue.append(s)
             if count_iterate == depth_target:
                 depth += 1
