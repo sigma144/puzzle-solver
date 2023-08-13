@@ -1,14 +1,10 @@
-Level:
-(start_key_stock, [edges], target_moves(optional))
-If edges is 1 single string, the brackets can be omitted
-
-Edge:
-(A, 'items', B): Path from room A to room B
-(A, 'items'): Path from room A to a dead end
-('items', B): Path from room 0 (starting room) to room B
-'items': Path from room 0 (starting room) to a dead end
-Edges sharing a start and end room can be merged togeter with "|"
-Example: ('o2', 1) & ('W2p2', 1) = ('o2|W2p2', 1)
+Level Layout:
+A           Single path
+A|B         Parallel paths
+A(B|C)      Path split
+A(B|C)D     Split + join
+A(B|C).     Split + join at empty room
+(A|B|).     Parallel paths reachable from both ends
 
 Key/Door Colors:
 w   White
@@ -20,6 +16,7 @@ b   Blue
 p   Purple
 k   Pink
 n   Brown
+l   Black
 m   Master
 u   Pure
 z   Glitch
