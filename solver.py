@@ -2,6 +2,34 @@ from math import sqrt
 import time
 from collections import deque
 
+_catalog = _used = None
+class Catalog:
+    @staticmethod
+    def init():
+        global _catalog, _used
+        _catalog = []; _used = {}
+    @staticmethod
+    def add(val):
+        global _catalog, _used
+        if val in _used:
+            return _used[val]
+        _catalog.append(val)
+        _used[val] = len(_catalog) - 1
+        return len(_catalog) - 1
+    @staticmethod
+    def sadd(val):
+        global _catalog, _used
+        sval = str(val)
+        if sval in _used:
+            return _used[sval]
+        _catalog.append(val)
+        _used[sval] = len(_catalog) - 1
+        return len(_catalog) - 1
+    @staticmethod
+    def get(num):
+        global _catalog
+        return _catalog[num]
+
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
