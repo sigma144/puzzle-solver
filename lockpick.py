@@ -1,4 +1,4 @@
-from solver import Solver
+from solver import Solver, Catalog
 import re, time
 import pickle
 
@@ -27,7 +27,7 @@ class LockpickState:
         if self.previous:
             s += 'Last move:' + str(self.last_move) + ' ' + str(self.last_access) + '\n'
         for e in self.edges:
-            s += str(e[0]) + ' -> ' + ' '.join([l[0]+str(l[1])+l[2] for l in e[1]]) + ' -> ' + str(e[2]) + '\n'
+            s += str(e[0]) + ' -> ' + ' '.join([Catalog.get(l)[0]+str(Catalog.get(l)[1])+Catalog.get(l)[2] for l in e[1]]) + ' -> ' + str(e[2]) + '\n'
         return s
     def copy(self, i, back):
         s = LockpickState(self.access, self.stock, self.edges)
@@ -101,10 +101,12 @@ class LockpickState:
         for i, e in enumerate(self.edges):
             self.edges[i] = (e[0], e[1][:], e[2])
             for i2, l in enumerate(self.edges[i][1]):
+                l = Catalog.get(l)
                 if l[0] and l[0][-1].isalpha() and '~' not in l[0]:
-                    self.edges[i][1][i2] = (l[0][:-1]+mimic, l[1], l[2])
+                    self.edges[i][1][i2] = Catalog.sadd((l[0][:-1]+mimic, l[1], l[2]))
     def open(self, i, si, aura, sign=1):
         seq = self.edges[i][1]
+        seq[si] = Catalog.get(seq[si])
         color = seq[si][1]; num = seq[si][2]
         if 'X' in num:
             num, stacks = num.split('X')
@@ -121,18 +123,18 @@ class LockpickState:
             if stack_limit and max(abs(imag), abs(real)) > stack_limit:
                 return False
             if real == 1 and imag == 0:
-                seq[si] = (aura, color, num)
+                seq[si] = Catalog.sadd((aura, color, num))
                 self.terminate = True
                 return True
             imag_part = 0
             if imag < 0: imag_part = str(imag) + 'i'
             elif imag > 0: imag_part = '+' + str(imag) + 'i'
             if real != 0 or imag != 0:
-                seq[si] = (aura, color, num + 'X' + str(real) + (imag_part or ''))
+                seq[si] = Catalog.sadd((aura, color, num + 'X' + str(real) + (imag_part or '')))
                 self.terminate = True
                 return True
         elif sign == -1:
-            seq[si] = (aura, color, num + 'X' + ('1+1i' if self.iview else '2'))
+            seq[si] = Catalog.sadd((aura, color, num + 'X' + ('1+1i' if self.iview else '2')))
             self.terminate = True
             return True
         seq.pop(si)
@@ -153,7 +155,7 @@ class LockpickState:
         if len(seq) == 0:
             return []
         si = -1 if back else 0
-        lock = seq[si]
+        lock = Catalog.get(seq[si])
         aura, color, num = lock
         #specials
         if color == '$':
@@ -186,7 +188,7 @@ class LockpickState:
         if not iview and aura != lock[0] and not (aura.replace('~', '') == lock[0] and num != '0' \
             and 'M' not in color and 'Z' not in color and 'i' not in num):
             s = state.copy(i, back)
-            s.edges[i][1][si] = (aura, color, num)
+            s.edges[i][1][si] = Catalog.sadd((aura, color, num))
             next_states.append(s)
         if '!' in aura or '@' in aura or '#' in aura:
             return next_states
@@ -450,7 +452,7 @@ class LockpickSolver(Solver):
         elif self.special == '5-3':
             for edge in state.edges:
                 for lock in edge[1]:
-                    if '~' in lock:
+                    if '~' in Catalog.get(lock):
                         return False
         elif self.special == '5-B':
             if state.last_move == 4 and state.stock.get('u', 0) == 0:
@@ -458,7 +460,7 @@ class LockpickSolver(Solver):
         elif self.special == '6-10':
             if len(state.edges[1][1]) <= 1:
                 return True
-            total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(lock[2])) for lock in edge[1] if lock[1] == 'u' and lock[2] != '-']) for edge in state.edges])
+            total = abs(state.stock.get('u', 0)) + sum([sum([abs(int(Catalog.get(lock)[2])) for lock in edge[1] if Catalog.get(lock)[1] == 'u' and Catalog.get(lock)[2] != '-']) for edge in state.edges])
             return total >= 25
         elif self.special == '7-E':
             if state.last_move == 0 and state.stock.get('c', 0) == 0: return False
@@ -468,7 +470,7 @@ class LockpickSolver(Solver):
             if state.last_move == 4 and state.previous.stock.get('o', 0) != 0: return False
             if state.last_move == 5 and state.previous.stock.get('p', 0) != 0: return False
         elif self.special == '8-5':
-            if not state.edges[5][1] and state.stock.get('w', 0) == 0 and (not state.edges[4][1] or ('', 'W', '0') in state.edges[4][1]):
+            if not state.edges[5][1] and state.stock.get('w', 0) == 0 and (not state.edges[4][1] or Catalog.sadd(('', 'W', '0')) in state.edges[4][1]):
                 return False
         elif self.special == '9-3':
             if state.last_move == 8:
@@ -501,24 +503,24 @@ class LockpickSolver(Solver):
         elif self.special == '10-3':
             prev = state.previous
             if state.last_move in [7, 8] and prev.last_move not in [7, 8]:
-                if len(prev.edges[4][1]) < 2 or prev.stock.get(prev.edges[4][1][0][0][-1].lower(), 0) > 0:
+                if len(prev.edges[4][1]) < 2 or prev.stock.get(Catalog.get(prev.edges[4][1][0])[0][-1].lower(), 0) > 0:
                     return False
             elif prev.last_move in [7, 8] and state.last_move not in [7, 8, 4]:
-                if prev.stock.get(prev.edges[4][1][0][0][-1].lower(), 0) > 0:
+                if prev.stock.get(Catalog.get(prev.edges[4][1][0])[0][-1].lower(), 0) > 0:
                     return False
         elif self.special == '10-6':
             prev = state.previous
             if state.last_move == 6 and len(state.edges[6][1]) <= 3 and prev.stock.get('n', 0) > 0:
-                if 'U' not in prev.edges[7][1][0][0] and '~' not in prev.edges[7][1][0][0]:
+                if 'U' not in Catalog.get(prev.edges[7][1][0])[0] and '~' not in Catalog.get(prev.edges[7][1][0])[0]:
                     return False
         elif self.special == '10-A':
             prev = state.previous
             if 0 < state.last_move < 7 and prev.stock.get('n', 0) > 0:
-                if prev.edges[state.last_move-1][1] and '~' not in prev.edges[state.last_move-1][1][0][0]:
+                if prev.edges[state.last_move-1][1] and '~' not in Catalog.get(prev.edges[state.last_move-1][1][0])[0]:
                     return False
         elif self.special == '10-B':
             prev = state.previous
-            if state.last_move == 10 and prev.edges[9][1] and prev.edges[9][1][0][2] == '0':
+            if state.last_move == 10 and prev.edges[9][1] and Catalog.get(prev.edges[9][1][0])[2] == '0':
                 return False
         return True
     def check_finish(self, state):
@@ -533,6 +535,7 @@ class LockpickSolver(Solver):
             locks = pm.edges[m.last_move][1]
             next = m.edges[m.last_move][1]
             for i2, lock in enumerate(locks):
+                lock = Catalog.get(lock)
                 if type(lock[1]) is list:
                     if lock[1][1] and lock[1][0] == lock[1][1][0][1]:
                         lock = (lock[0], '['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
@@ -551,6 +554,7 @@ class LockpickSolver(Solver):
                         print(red + lock[0] + lock[1] + lock[2], end=' ')
                 else:
                     next_lock = next[i2] if m.last_access else next[i2 + len(next) - len(locks)]
+                    next_lock = Catalog.get(next_lock)
                     if '~' in next_lock[0]:
                         next_lock = (next_lock[0].replace('~', ''), 'N', next_lock[2])
                     if next_lock[0] and next_lock[0][-1].isalpha():
@@ -574,6 +578,8 @@ class LockpickSolver(Solver):
             print(black)
             if verbose: print(m)
     def solve(self, state, debug=False, print_moves=True, verbose=False):
+        Catalog.init()
+        state.edges = [(e[0], [Catalog.sadd(l) for l in e[1]], e[2]) for e in state.edges]
         #print(state)
         self.start = 0
         self.special = None
@@ -651,7 +657,7 @@ def test(full=False, print_moves=False):
         sol = solver.solve(puzzle, print_moves=print_moves)
         if len(sol)-1 != puzzle.target_moves:
             print('\033[91m')
-            print(puzzle)
+            solver.print_moves(sol)
             print('Solve Failed, test terminated\033[00m')
             return
     elapsed = time.time() - start_time
@@ -808,7 +814,7 @@ finale = parse('m2wp8((C2WPg-WOx|KWO-xK12c-12)b-u|W0C-2M0o=1(w(Wo=-1o=-1!C!Cg-5u
 graduation = parse('u(Z/[R2iO0G-6C0B4iP0W6]$|m=-1P/[]|m=-1P/[]|U(O|K|C)(O-1|K-1|C-1)(o3|o-32)(o254iu|P6i)|U(P0p-123|K0k4)(O0o10|P0p5)(K0k12|O0o3)k64iu|Ur=0g=0b=0(Cx|K+)c=2iu|U(R|G|B)(!O|@O|#O)c24u|Un3+7iN0un=1n=-1|' + 
     'U(P5|O-6)(g-k-|r-b-|o-)(p-u|n-)|U(R/K4|G/K4)(B/K4|P/R-1)(z*u|z-*)|Um=-1(m=-1|O3(m=-1|P123u))|UL/[R-1OGxCB-1PKU0]mxiL/[O0M0C0P0K0U0]u|U(K/[]|O/[]|C/[])(Zi|Z|Z-1)(Z/L6i|Z8)u|Ulxig-xib-xir-xig-xi|UW/L0u')
 
-#test(full=0, print_moves=0) #Time: ~95 sec
+#test(full=0, print_moves=0) #Time: ~83 sec
 #practice()
 
 LockpickSolver().solve(p4B, verbose=0, debug=0)
