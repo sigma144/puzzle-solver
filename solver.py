@@ -1,6 +1,7 @@
 from math import sqrt
 import time
 from collections import deque
+import psutil
 
 _catalog = _used = None
 class Catalog:
@@ -32,7 +33,8 @@ class Catalog:
 
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
-    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False): #Implement __hash__ and __eq__ for states
+    #Implement __hash__ and __eq__ for states
+    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False, showprogress=False):
         if debug: return self.solve_optimal_debug(starting_state)
         prev_states = set()
         state_queue = deque()
@@ -53,14 +55,12 @@ class Solver:
                 s.previous = state
                 if self.check_finish(s):
                     elapsed = time.time() - start_time
-                    #Done solving, print linked list of moves
                     move_list = self.trace_moves(s, prnt, diff, diff_trail)
                     print("Solved in", len(move_list)-1, "moves!")
                     print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
                     return move_list
             for s in next:
                 if self.check_state(s) and len(prev_states) != (prev_states.add(s) or len(prev_states)):
-                #if self.check_state(s) and len(prev_states) != (prev_states.add(hash(s)) or len(prev_states)):
                     state_queue.append(s)
             if count_iterate == depth_target:
                 depth += 1
@@ -70,6 +70,14 @@ class Solver:
                 depth_time = time.time()
                 print("Depth "+str(depth)+'...'+"{:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
                 depth_target = count_iterate + len(state_queue)
+            if count_iterate % 20000 == 0:
+                if showprogress:
+                    print(state)
+                    print(str(count_iterate // 1000) + "k states checked")
+                memuse = psutil.virtual_memory()[2]
+                if memuse >= 95:
+                    print(Solver._red + "HIGH MEMORY USE, CLEARING STATE SET TO FREE MEMORY" + Solver._black)
+                    prev_states.clear()
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
@@ -92,7 +100,6 @@ class Solver:
                 s.previous = state
                 if self.check_finish(s):
                     elapsed = time.time() - start_time
-                    #Done solving, print linked list of moves
                     move_list = self.trace_moves(s)
                     for move in move_list:
                         print(move)
@@ -118,6 +125,7 @@ class Solver:
                 strs = [str(m) for m in move_list]
                 print(strs[0])
                 for i, m2 in enumerate(strs[1:]):
+                    #input()
                     newstr = ""
                     m1 = strs[i]
                     for i2 in range(min(len(m1), len(m2))):
