@@ -35,7 +35,6 @@ class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     #Implement __hash__ and __eq__ for states
     def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False, showprogress=False):
-        if debug: return self.solve_optimal_debug(starting_state)
         prev_states = set()
         state_queue = deque()
         starting_state.previous = None
@@ -69,6 +68,9 @@ class Solver:
                 depth_last = elapsed
                 depth_time = time.time()
                 print("Depth "+str(depth)+'...'+"{:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                if debug:
+                    print(prev_states)
+                    input(state_queue)
                 depth_target = count_iterate + len(state_queue)
             if count_iterate % 20000 == 0:
                 if showprogress:
@@ -76,40 +78,9 @@ class Solver:
                     print(str(count_iterate // 1000) + "k states checked")
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
-                    print(Solver._red + "HIGH MEMORY USE, CLEARING STATE SET TO FREE MEMORY" + Solver._black)
-                    prev_states.clear()
-        print("No solution exists.")
-        elapsed = time.time() - start_time
-        print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-        return []
-    def solve_optimal_debug(self, starting_state): #Implement __hash__ and __eq__ for states
-        self.prev_states = set()
-        self.state_queue = deque()
-        starting_state.previous = None
-        self.state_queue.append(starting_state)
-        count_iterate = 0
-        print("Solving...")
-        start_time = time.time()
-        while len(self.state_queue) > 0:
-            print("QUEUE SIZE:", len(self.state_queue))
-            state = self.state_queue.popleft()
-            print(Solver.trace_moves(state))
-            input()
-            next = self.get_next_states(state)
-            for s in next:
-                s.previous = state
-                if self.check_finish(s):
-                    elapsed = time.time() - start_time
-                    move_list = self.trace_moves(s)
-                    for move in move_list:
-                        print(move)
-                    print("Solved in", len(move_list)-1, "moves!")
-                    print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-                    return move_list
-            for s in next:
-                if not s in self.prev_states and self.check_state(s):
-                    self.state_queue.append(s)
-                    self.prev_states.add(s)
+                    print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+                    #print(Solver._red + "HIGH MEMORY USE, CLEARING STATE SET TO FREE MEMORY" + Solver._black)
+                    #prev_states.clear()
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
