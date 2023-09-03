@@ -1,5 +1,5 @@
 import pickle
-from solver import Solver
+from solver import Solver, Catalog
 
 CHARS = ' #*X^v<>BYOUDLRWSF+-{}byoudlrwsf'
 SPACE, WALL, EXIT, BLOCK, UP, DOWN, LEFT, RIGHT, SQUARE, DIAMOND, CIRCLE,  \
@@ -9,6 +9,7 @@ CSYMUP, CSYMDOWN, CSYMLEFT, CSYMRIGHT, CSYMSQUARE, CSYMDIAMOND, CSYMCIRCLE \
     = range(len(CHARS))
 
 trapsL = trapsR = trapsU = trapsD = []
+use_catalog = False
 
 class AbridgeState:
     def __hash__(self):
@@ -16,6 +17,7 @@ class AbridgeState:
     def __eq__(self, state):
         return self.board == state.board
     def __repr__(self) -> str:
+        if use_catalog: return '\n'.join([''.join([CHARS[n] for n in Catalog.get(row)]) for row in self.board])
         return '\n'.join([''.join([CHARS[n] for n in row]) for row in self.board])
     def set(self, x, y, val):
         self.board[y] = self.board[y][:]
@@ -82,6 +84,7 @@ class AbridgeState:
             if pair is None:
                 new_state.set(x+dx, y+dy, self.unsym(new_state.board[y+dy][x+dx]))
                 if corrupt: new_state.set(x, y, WALL)
+                if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
                 return new_state
             x2, y2 = pair
             dx2, dy2 = dx, dy
@@ -101,6 +104,7 @@ class AbridgeState:
             if pair is None:
                 if new_state.board[y+dy+dy][x+dx+dx] == SYMCIRCLE:
                     new_state.set(x+dx+dx, y+dy+dy, CIRCLE)
+                if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
                 return new_state
             x2, y2 = pair
             result = new_state.push(x2-dx, y2-dy, dx, dy)
@@ -111,6 +115,7 @@ class AbridgeState:
             new_state.symhints[(x+dx, y+dy)] = (x2+dx, y2+dy)
             new_state.symhints[(x2+dx, y2+dy)] = (x+dx, y+dy)
         if corrupt: new_state.set(x, y, WALL)
+        if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
         return new_state
     def is_trapped(self, x, y, tile):
         if tile == UP and trapsU[y][x] or \
@@ -171,7 +176,10 @@ class AbridgeState:
         return None
 
 class AbridgeSolver(Solver):
-    def solve(self, board, debug=False, showprogress=False):
+    def solve(self, board, debug=False, showprogress=False, catalog=False):
+        global use_catalog
+        use_catalog = catalog
+        if catalog: Catalog.init()
         starting_state = AbridgeState()
         board = [[CHARS.index(c) for c in row] for row in board]
         starting_state.board = board
@@ -187,9 +195,12 @@ class AbridgeSolver(Solver):
         self.detect_traps(starting_state)
         self.corrupt_states = {}
         for l in [trapsU, trapsD, trapsL, trapsR]: print('\n'.join([''.join([str(int(n)) for n in row]) for row in l])+'\n')
+        if catalog: starting_state.board = [Catalog.sadd(r) for r in starting_state.board]
         self.solve_optimal(starting_state, debug=debug, showprogress=showprogress)
     def get_next_states(self, state):
         states = []
+        state = state.copy()
+        if use_catalog: state.board = [Catalog.get(r) for r in state.board]
         for y, row in enumerate(state.board):
             for x, val in enumerate(row):
                 if val == SPACE or val == WALL or val == EXIT or val == BLOCK:
@@ -307,7 +318,7 @@ class AbridgeSolver(Solver):
     def check_finish(self, state):
         return state.tiles_left <= 0
 
-puzzle_doubles = [ #Failed
+puzzle_doubles = [ #Failed even after 45000K+ iterations, this will need a LOT of state pruning
     ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
     ['#','#','#','v','v',' ',' ',' ',' ','#','#','#','#','#','#'],
     ['#','#','*',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','#'],
@@ -329,16 +340,6 @@ puzzle_follow_the_leader = [ #Failed
     ['#',' ','#',' ','#',' ','#',' ','#'],
     ['#',' ','Y',' ','#',' ',' ','O','#'],
     ['#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_teamwork = [ #Failed
-    ['#','#','#','#','#','#','#','#'],
-    ['#',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ','#',' ','#',' ',' ','#'],
-    ['#',' ','#','v','#',' ','B','#'],
-    ['#',' ','O','#','^','#','#','#'],
-    ['#','<',' ',' ',' ','Y','*','#'],
-    ['#','#','#','#','#','#','#','#'],
 ]
 
 puzzle_scattered = [ #Failed
@@ -465,7 +466,7 @@ puzzle_test = [
     ['#','#','#','#','#','#','#'],
 ]
 
-AbridgeSolver().solve(puzzle_dead_ends, debug=0, showprogress=1)
+AbridgeSolver().solve(puzzle_knockback, debug=0, showprogress=1, catalog=1) #Catalog makes solve slower, but is more memory efficient
 
 puzzle_blank = [
     ['#','#','#','#','#','#','#'],
