@@ -25,7 +25,7 @@ class AbridgeState:
         state.board = self.board[:]
         state.tiles_left = self.tiles_left
         state.circles_left = self.circles_left
-        #state.symtiles = self.symtiles
+        state.symhints = self.symhints
         return state
     def push(self, x, y, dx, dy):
         nextx, nexty = x+dx, y+dy
@@ -42,7 +42,6 @@ class AbridgeState:
             return True
         elif self.board[nexty][nextx] == EXIT:
             if self.board[y][x] == CIRCLE or self.board[y][x] == SYMCIRCLE:
-                #Trap check
                 if self.circles_left == 1:
                     for y2 in range(len(self.board)):
                         for x2 in range(len(self.board[0])):
@@ -93,6 +92,11 @@ class AbridgeState:
             result = new_state.push(x2, y2, dx2, dy2)
             if not result: return None
             if new_state.board[y2+dy2][x2+dx2] in [CORRUP, CORRDOWN, CORRLEFT, CORRRIGHT, CORRSQUARE, CORRDIAMOND, CORRCIRCLE]: new_state.set(x2,y2, WALL)
+            new_state.symhints = {k:v for k,v in new_state.symhints.items()}
+            new_state.symhints.pop((x, y), None)
+            new_state.symhints.pop((x2, y2), None)
+            new_state.symhints[(x+dx, y+dy)] = (x2+dx2, y2+dy2)
+            new_state.symhints[(x2+dx2, y2+dy2)] = (x+dx, y+dy)
         if mirror_pull:
             if pair is None:
                 if new_state.board[y+dy+dy][x+dx+dx] == SYMCIRCLE:
@@ -101,6 +105,11 @@ class AbridgeState:
             x2, y2 = pair
             result = new_state.push(x2-dx, y2-dy, dx, dy)
             if not result: return None
+            new_state.symhints = {k:v for k,v in new_state.symhints.items()}
+            new_state.symhints.pop((x, y), None)
+            new_state.symhints.pop((x2, y2), None)
+            new_state.symhints[(x+dx, y+dy)] = (x2+dx, y2+dy)
+            new_state.symhints[(x2+dx, y2+dy)] = (x+dx, y+dy)
         if corrupt: new_state.set(x, y, WALL)
         return new_state
     def is_trapped(self, x, y, tile):
@@ -147,8 +156,14 @@ class AbridgeState:
         return symbol
     def find_mirror_symbol(self, x, y):
         symbol = self.uncorrupt(self.board[y][x])
-        for y2 in range(len(self.board)):
-            for x2 in range(len(self.board[0])):
+        for h in [(x, y), (x+1, y), (x-1, y), (x, y+1), (x, y-1)]:
+            hint = self.symhints.get(h, None)
+            if hint:
+                symbol2 = self.uncorrupt(self.board[hint[1]][hint[0]])
+                if symbol == symbol2 or symbol in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT] and symbol2 in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT]:
+                    return hint
+        for y2 in range(1, len(self.board)-1):
+            for x2 in range(1, len(self.board[0])-1):
                 if x == x2 and y == y2: continue
                 symbol2 = self.uncorrupt(self.board[y2][x2])
                 if symbol == symbol2 or symbol in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT] and symbol2 in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT]:
@@ -162,11 +177,13 @@ class AbridgeSolver(Solver):
         starting_state.board = board
         starting_state.tiles_left = sum([sum([val not in [SPACE, WALL, EXIT] for val in row]) for row in board])
         starting_state.circles_left = sum([sum([val == CIRCLE or val == SYMCIRCLE for val in row]) for row in board])
-        starting_state.symtiles = {}
+        starting_state.symhints = {}
         for y, row in enumerate(starting_state.board):
             for x, val in enumerate(row):
                 if starting_state.unsym(val) != val:
-                    starting_state.symtiles[val] = starting_state.symtiles.get(val, []) + [(x, y)]
+                    hint = starting_state.find_mirror_symbol(x, y)
+                    starting_state.symhints[(x, y)] = hint
+                    starting_state.symhints[hint] = (x, y)
         self.detect_traps(starting_state)
         self.corrupt_states = {}
         for l in [trapsU, trapsD, trapsL, trapsR]: print('\n'.join([''.join([str(int(n)) for n in row]) for row in l])+'\n')
@@ -274,7 +291,6 @@ class AbridgeSolver(Solver):
                     states.append(state.copy_and_push(x, y, 1, 1, corrupt=True, mirror=True))
                 #elif val == CSYMCIRCLE:
                 #    pass
-        #return [s for s in states if s != None and self.check_corrupt_redundancy(s)]
         return [s for s in states if s is not None]
     def detect_traps(self, state):
         global trapsL; trapsL = [[True for _ in row] for row in state.board]
@@ -288,38 +304,6 @@ class AbridgeSolver(Solver):
                 trapsR[y][x] = not state.can_escape(x, y, -1, 0, diagonal)
                 trapsU[y][x] = not state.can_escape(x, y, 0, 1, diagonal)
                 trapsD[y][x] = not state.can_escape(x, y, 0, -1, diagonal)
-    def check_corrupt_redundancy(self, state):
-        state2 = state.copy()
-        state2.board = [[SPACE if t == WALL else t for t in row] for row in state.board]
-        h = hash(state2)
-        if h in self.corrupt_states:
-            return False
-            for s in self.corrupt_states[h]:
-                if self.is_subset(s, state):
-                    #if hash(s) != hash(state):
-                    #    input(str(s)+"\n"+str(state) + "Subset, Skip 2nd")
-                    return False
-                #else:
-                #    input(str(s)+"\n"+str(state) + "Not subset")
-            for s in self.corrupt_states[h][:]:
-                if self.is_subset(state, s):
-                    #input(str(s)+"\n"+str(state) + "Superset, erase 1st")
-                    self.corrupt_states[h].remove(s)
-            self.corrupt_states[h].append(state)
-            #print(len(self.corrupt_states[h]))
-            #input(str(state)+"\nAdd")
-        else:
-            self.corrupt_states[h] = [state]
-            #input(str(state)+"\nAdd (First)")
-        return True
-
-    def is_subset(self, state1, state2):
-        for row1, row2 in zip(state1.board, state2.board):
-            for t1, t2 in zip(row1, row2):
-                if t1 == WALL and t2 != WALL:
-                    return False
-        return True
-
     def check_finish(self, state):
         return state.tiles_left <= 0
 
@@ -474,14 +458,14 @@ puzzle_testsym = [ #Testing
 
 puzzle_test = [
     ['#','#','#','#','#','#','#'],
-    ['#','#','S','#','#','#','#'],
-    ['#','#','#','S','#','#','#'],
-    ['#','#','#','#',' ','#','#'],
-    ['#','#','#','#','#','*','#'],
+    ['#','#','W',' ',' ','#','#'],
+    ['#','#','#','W',' ','#','#'],
+    ['#','#','#','#',' ',' ','#'],
+    ['#','#','#','#',' ','*','#'],
     ['#','#','#','#','#','#','#'],
 ]
 
-AbridgeSolver().solve(puzzle_expedition, debug=0, showprogress=1)
+AbridgeSolver().solve(puzzle_dead_ends, debug=0, showprogress=1)
 
 puzzle_blank = [
     ['#','#','#','#','#','#','#'],
