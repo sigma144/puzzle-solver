@@ -94,7 +94,7 @@ class AbridgeState:
             elif self.uncorrupt(self.board[y2][x2]) == SYMRIGHT: dx2, dy2 = (1, 0)
             result = new_state.push(x2, y2, dx2, dy2)
             if not result: return None
-            if new_state.board[y2+dy2][x2+dx2] in [CORRUP, CORRDOWN, CORRLEFT, CORRRIGHT, CORRSQUARE, CORRDIAMOND, CORRCIRCLE]: new_state.set(x2,y2, WALL)
+            if self.uncorrupt(new_state.board[y2+dy2][x2+dx2]) != new_state.board[y2+dy2][x2+dx2]: new_state.set(x2,y2, WALL)
             new_state.symhints = {k:v for k,v in new_state.symhints.items()}
             new_state.symhints.pop((x, y), None)
             new_state.symhints.pop((x2, y2), None)
@@ -166,13 +166,13 @@ class AbridgeState:
             if hint:
                 symbol2 = self.uncorrupt(self.board[hint[1]][hint[0]])
                 if symbol == symbol2 or symbol in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT] and symbol2 in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT]:
-                    return hint
+                    if (x, y) != hint: return hint
         for y2 in range(1, len(self.board)-1):
             for x2 in range(1, len(self.board[0])-1):
                 if x == x2 and y == y2: continue
                 symbol2 = self.uncorrupt(self.board[y2][x2])
                 if symbol == symbol2 or symbol in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT] and symbol2 in [SYMUP, SYMDOWN, SYMLEFT, SYMRIGHT]:
-                    return x2, y2
+                    if (x2, y2) != hint: return x2, y2
         return None
 
 class AbridgeSolver(Solver):
@@ -330,6 +330,42 @@ puzzle_doubles = [ #Failed even after 45000K+ iterations, this will need a LOT o
     ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
 ]
 
+puzzle_w03 = [
+    ['#','#','#','#','#','#','#','#','#'],
+    ['#','#','#','*','*','*','#','#','#'],
+    ['#','#',' ',' ','X',' ',' ','#','#'],
+    ['#',' ',' ','X',' ','X',' ',' ','#'],
+    ['#',' ','X',' ',' ',' ','X',' ','#'],
+    ['#',' ',' ','X',' ','X',' ',' ','#'],
+    ['#','#','Y',' ','X',' ','Y','#','#'],
+    ['#','#','#',' ','Y',' ','#','#','#'],
+    ['#','#','#','#','#','#','#','#','#'],
+]
+
+puzzle_w06 = [
+    ['#','#','#','#','#','#','#'],
+    ['#','^',' ',' ',' ','O','#'],
+    ['#',' ','X','X','X',' ','#'],
+    ['#',' ','X','*','X',' ','#'],
+    ['#',' ','X','X','X',' ','#'],
+    ['#','B',' ',' ',' ','Y','#'],
+    ['#','#','#','#','#','#','#'],
+]
+
+puzzle_butterfly_effect = [
+    ['#','#','#','#','#','#','#','#','#','#','#'],
+    ['#','*',' ',' ','#','#','#',' ',' ','*','#'],
+    ['#',' ',' ','#',' ','#',' ','#',' ',' ','#'],
+    ['#',' ','#','S',' ','#',' ','S','#',' ','#'],
+    ['#','#',' ',' ','W','#','F',' ',' ','#','#'],
+    ['#','#','#','#','#','#','#','#','#','#','#'],
+    ['#','*','#',' ',' ','#',' ',' ','#','*','#'],
+    ['#',' ','#',' ',' ','#',' ',' ','#',' ','#'],
+    ['#',' ',' ',' ',' ','#',' ',' ',' ',' ','#'],
+    ['#',' ','#','U','W','#','F','U','#',' ','#'],
+    ['#','#','#','#','#','#','#','#','#','#','#'],
+]
+
 puzzle_follow_the_leader = [ #Failed
     ['#','#','#','#','#','#','#','#','#'],
     ['#',' ',' ',' ','#',' ',' ',' ','#'],
@@ -351,17 +387,6 @@ puzzle_scattered = [ #Failed
     ['#',' ','-',' ','#',' ',' ',' ','#'],
     ['#',' ',' ',' ',' ','#',' ',' ','#'],
     ['#','b',' ',' ','#',' ',' ','b','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_backstab = [ #Failed
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#','B','X','#',' ','X',' ',' ','#'],
-    ['#','#',' ','Y','#','#','X','#','#'],
-    ['#','O',' ','X','#','X',' ',' ','#'],
-    ['#','#',' ','#','#','#',' ','#','#'],
-    ['#','#',' ',' ','#',' ',' ',' ','#'],
-    ['#',' ',' ','*',' ',' ','#',' ','#'],
     ['#','#','#','#','#','#','#','#','#'],
 ]
 
@@ -466,7 +491,7 @@ puzzle_test = [
     ['#','#','#','#','#','#','#'],
 ]
 
-AbridgeSolver().solve(puzzle_knockback, debug=0, showprogress=1, catalog=1) #Catalog makes solve slower, but is more memory efficient
+AbridgeSolver().solve(puzzle_misdirection, debug=0, showprogress=1, catalog=0) #Catalog makes solve slower, but is more memory efficient
 
 puzzle_blank = [
     ['#','#','#','#','#','#','#'],
