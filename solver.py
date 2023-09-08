@@ -105,29 +105,33 @@ class Solver:
             else:
                 for m in move_list: print(m)
         return move_list
-    def solve_recursive(self, starting_state, depth=0):
-        self.depth = depth
+    
+    def solve_recursive(self, starting_state, debug=0):
         print("Solving...")
+        self.count_recurse = -1
         start_time = time.time()
-        state = self._solve_recursive(starting_state)
+        state = self._solve_recursive(starting_state, debug)
         elapsed = time.time() - start_time
         if state is None:
             print("No solution exists.")
         else:
             print(state)
         print("Solved in {:.2f} seconds".format(elapsed))
+        print(f"{self.count_recurse} recursions.")
         return state
-    def _solve_recursive(self, state): #Helper function
-        result = self.iterate_state(state, depth=self.depth)
-        while result == True:
-            result = self.iterate_state(state, depth=self.depth)
-        if result == None or not self.check_state(state):
-            return None
+
+    def _solve_recursive(self, state, debug=0):
+        if debug:
+            input(state)
+        self.count_recurse += 1
+        if state == None: return None
         if self.check_finish(state):
             return state
         next = self.get_next_states(state)
         for s in next:
-            result = self._solve_recursive(s)
+            if not self.check_state(s):
+                continue
+            result = self._solve_recursive(s, debug)
             if result:
                 return result
         return None
@@ -276,12 +280,12 @@ class GridSolver:
                 state.x = state.y = 0
         return self.solution
 
-    def solve_recursive(self, starting_state, depth=0): #State must have "grid", "x", and "y" variables
+    def solve_recursive(self, starting_state, debug=0): #State must have "grid", "x", and "y" variables
         print("Solving...")
-        self.count_recurse = -1; self.count_iterate = 0
+        self.count_recurse = -1
         start_time = time.time()
         starting_state.x = starting_state.y = 0
-        state = self._solve_recursive(starting_state, depth)
+        state = self._solve_recursive(starting_state, debug)
         elapsed = time.time() - start_time
         if state is None:
             print("No solution exists.")
@@ -291,11 +295,10 @@ class GridSolver:
         print(f"{self.count_recurse} recursions.")
         return state
 
-    def _solve_recursive(self, state, depth):
+    def _solve_recursive(self, state, debug=0):
+        if debug:
+            input(state)
         self.count_recurse += 1
-        if depth > 0:
-            result = self._iterate_valid_placements(state, depth)
-            if result != False: state = result
         if state == None: return None
         while state.grid[state.y][state.x] != 0:
             state.x += 1
@@ -306,7 +309,9 @@ class GridSolver:
                     return state if self.check_finish(state) else None
         next = self.get_next_states(state)
         for s in next:
-            result = self._solve_recursive(s, depth)
+            if not self.check_state(s):
+                continue
+            result = self._solve_recursive(s, debug)
             if result:
                 return result
         return None
