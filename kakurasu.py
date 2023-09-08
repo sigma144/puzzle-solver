@@ -5,17 +5,17 @@ class KakurasuSolver(GridSolver):
         totals = [int(num) for num in puzzle.split("/")]
         width = height = len(totals) // 2
         self.column_totals, self.row_totals = totals[:width], totals[width:]
-        self.solve_recursive_r(BinaryGridState([[0 for x in range(width)] for y in range(height)], width - 1, height - 1))
+        self.solve_recursive(BinaryGridState([[0 for x in range(width)] for y in range(height)], width - 1, height - 1))
 
     def get_next_states(self, state):
         states = []
         #Place block
         new_state = BinaryGridState(state.grid, state.x, state.y)
-        new_state.grid[state.y][state.x] = 1
+        new_state.set2(1)
         states.append(new_state)
         #Don't place block
         new_state = BinaryGridState(state.grid, state.x, state.y)
-        new_state.grid[state.y][state.x] = -1
+        new_state.set2(-1)
         states.append(new_state)
         return states
 
@@ -50,4 +50,4 @@ puzzle_hard = '13/9/34/9/26/23/29/25/29/37/25/11/43/32/12/13/27/30'
 
 puzzle_ultra = '38/17/21/42/2/12/45/45/7/45/59/30/40/5/54/57/38/35/18/42/58/35/36/1'
 
-KakurasuSolver().solve(puzzle_ultra)
+KakurasuSolver().solve(puzzle_hard)

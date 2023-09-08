@@ -25,12 +25,11 @@ class FutoshikiSolver(GridSolver):
         for i in range(len(state.grid)):
             if i + 1 not in self.get_row(state, state.y) and i + 1 not in self.get_column(state, state.x):
                 new_state = NumberGridState(state.grid, state.x, state.y)
-                new_state.grid[state.y][state.x] = i + 1
+                new_state.set(state.x, state.y, i + 1)
                 states.append(new_state)
         return states
 
     def check_state(self, state):
-
         num = state.grid[state.y][state.x]
         less_dir = self.less[state.y][state.x]
         if len(less_dir) > 0 and num == len(state.grid):
@@ -93,14 +92,14 @@ class FutoshikiSolver(GridSolver):
                     else:
                         return False
         return True
-        
-puzzle_easy = '0R,0,0,0R,3D,0R,0,0,0,0,0,2,0,0,5,0,0D,0,0L,0,0,0,0,0U,0U,'
-#ID: 2912440
 
-puzzle_medium = '0,0,0,0,0R,0D,4,0R,0,0,0L,0DL,0L,0,0,0,0L,5,0,0,0,0,0,0,3D,0D,0D,0U,0,0,0,0,0,0L,0,0,0U,0L,0,0,0D,0,0,0,0,0,0,0L,0,'
-#ID: 9217770
+puzzle_easy = '0R,0R,0R,0,0D,0,0,0,0,0,0,0U,0D,0,0,0,0,0L,0,3U,0U,0,0,0R,0,'
+#5x5 Hard Futoshiki Puzzle ID: 7,818,562
 
-puzzle_hard = '2,0L,0L,0L,0,0,0R,0,0,0D,0,0U,0L,0R,0,0U,0,0,4,0L,0L,0D,0,0,0L,0,0,0U,0L,0,7,0,0,0,0,0L,0,0D,0,0,7,0,0,0U,0,0,6,0L,0U,0U,0U,0R,0,0,0,0U,0R,0,0,0,0,0,0,0U,0D,0U,0L,0L,0,0D,0UL,0U,0,0R,0,4,0R,0,0,0U,0,'
-#ID: 4279528
+puzzle_medium = '0,0,2,0,0L,0R,0,0U,0R,0,0,0,0,0,0,0,5RD,0,0,0U,0,0,0L,0,0,0,0,0,0,3,4,0,0,0,0,0,0,0L,5UL,0U,6R,0,0,6,0,2,0R,0R,0,'
+#7x7 Hard Futoshiki Puzzle ID: 2,470,060
+
+puzzle_hard = '2R,0,0,0,0,0,0,0,4L,0,0L,9,0D,0,0D,0,0,0U,0,0,0,0,0,0,0,0L,0,7UD,0L,0UD,0,0,0L,0,0,0U,0,0,0,0U,7L,0,0,2,0D,0R,0R,0D,0,0,0R,0,0,0L,6D,0,0D,2U,0L,0U,0D,9,0,0,0D,0R,0,0,0,0L,6,0L,0,0,0U,0,0,0,0,0,0,'
+#9x9 Hard Futoshiki Puzzle ID: 279,528
 
 FutoshikiSolver().solve(puzzle_medium)

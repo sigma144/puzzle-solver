@@ -27,14 +27,14 @@ class AquariumSolver(GridSolver):
         max_height = max([y for x, y in region])
         new_state = BinaryGridState(state.grid, state.x, state.y)
         for x, y in region:
-            new_state.grid[y][x] = 1
+            new_state.set(x, y, 1)
         if self.check_rows_columns(new_state, new_state.x, new_state.y):
             states.append(new_state)
         for height in range(min_height, max_height + 1):
             new_state = BinaryGridState(new_state.grid, state.x, state.y)
             for x, y in region:
                 if height == y:
-                    new_state.grid[y][x] = -1
+                    new_state.set(x, y, -1)
             if self.check_rows_columns(new_state, new_state.x, new_state.y):
                 states.append(new_state)
         return states

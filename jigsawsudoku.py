@@ -14,7 +14,7 @@ class JigsawSudokuSolver(GridSolver):
         for i in range(len(state.grid)):
             if self.can_place(state, state.x, state.y, i + 1):
                 new_state = NumberGridState(state.grid, state.x, state.y)
-                new_state.grid[state.y][state.x] = i + 1
+                new_state.set2(i + 1)
                 states.append(new_state)
         return states
     def can_place(self, state, x, y, num):
