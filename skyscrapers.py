@@ -21,7 +21,7 @@ class SkyscrapersSolver(GridSolver):
         for i in range(len(self.totals_top)):
             if i + 1 not in self.get_row(state, state.y) and i + 1 not in self.get_column(state, state.x):
                 new_state = NumberGridState(state.grid, state.x, state.y)
-                new_state.grid[state.y][state.x] = i + 1
+                new_state.set2(i + 1)
                 states.append(new_state)
         return states
 

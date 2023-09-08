@@ -19,76 +19,26 @@ class StarBattleSolver(GridSolver):
         return states
 
     def place_star(self, state, x, y):
-        state.grid[y][x] = 1
+        state.set(x, y, 1)
         for dx, dy in DIRECTIONS8:
-            if self.on_grid(state, x + dx, y + dy):
-                state.grid[y + dy][x + dx] = -1
+            if state.on_grid(x + dx, y + dy):
+                state.set(x + dx, y + dy, -1)
         #Update row
         if self.get_row(state, y).count(1) == self.star_amount:
             for X in range(len(state.grid[y])):
                 if state.grid[y][X] == 0:
-                    state.grid[y][X] = -1
+                    state.set(X, y, -1)
         #Update column
         if self.get_column(state, x).count(1) == self.star_amount:
             for Y in range(len(state.grid)):
                 if state.grid[Y][x] == 0:
-                    state.grid[Y][x] = -1
+                    state.set(x, Y, -1)
         #Update region
         if self.get_region(state, x, y).count(1) == self.star_amount:
             for X, Y in self.get_region_points(x, y):
                 if state.grid[Y][X] == 0:
-                    state.grid[Y][X] = -1
-'''
-    def iterate_state(self, state):
-        updated = False
-        for y,row in enumerate(self.rows(state)):
-            count = 0
-            for x,num in enumerate(row):
-                if num == 1:
-                    count += 1
-                if num == 0:
-                    count += 1
-                    if x < len(row)-1 and row[x+1] == 0:
-                        row[x+1] = 2
-            
-            if count < self.star_amount:
-                return None
-            if count == self.star_amount:
-                for x,num in enumerate(row):
-                    if num == 0 and not (x < len(row)-1 and row[x+1] == 2):
-                        self.place_star(state, x, y)
-                        updated = True
+                    state.set(X, Y, -1)
 
-        for x,col in enumerate(self.columns(state)):
-            count = 0
-            for y,num in enumerate(col):
-                if num == 1:
-                    count += 1
-                if num == 0:
-                    count += 1
-                    if y < len(col)-1 and col[y+1] == 0:
-                        col[y+1] = 2
-            
-            if count < self.star_amount:
-                return None
-            if count == self.star_amount:
-                for y,num in enumerate(col):
-                    if num == 0 and not (y < len(col)-1 and col[y+1] == 2):
-                        self.place_star(state, x, y)
-                        updated = True
-
-        for r,region in enumerate(self.regions(state)):
-            count = region.count(0) + region.count(1)
-            if count < self.star_amount:
-                return None
-            if count == self.star_amount:
-                for x,y in self.get_all_region_points()[r]:
-                    if state.grid[y][x] == 0:
-                        self.place_star(state, x, y)
-                        updated = True
-
-        return updated
-'''
 puzzle_easy = '1,1,2,2,2,1,1,1,2,2,3,1,1,2,4,3,3,3,5,4,3,3,3,5,5'
 #1 star - ID: 8462991
 

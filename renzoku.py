@@ -9,7 +9,7 @@ class RenzokuSolver(GridSolver):
         width = height = int(sqrt(len(grid_values)))
         state = NumberGridState([[0 for x in range(width)] for y in range(height)], 0, 0)
         self.adjacent = [[[] for x in range(width)] for y in range(height)]
-        self.non_adjacent = [[[(x + dir[0], y + dir[1]) for dir in DIRECTIONS if self.on_grid(state, x + dir[0], y + dir[1])] for x in range(width)] for y in range(height)]
+        self.non_adjacent = [[[(x + dir[0], y + dir[1]) for dir in DIRECTIONS if state.on_grid(x + dir[0], y + dir[1])] for x in range(width)] for y in range(height)]
         for i, num in enumerate(grid_values):
             x, y = i % width, i // height
             state.grid[y][x] = int(num[0])
@@ -28,7 +28,7 @@ class RenzokuSolver(GridSolver):
         for i in range(len(state.grid)):
             if i + 1 not in self.get_row(state, state.y) and i + 1 not in self.get_column(state, state.x):
                 new_state = NumberGridState(state.grid, state.x, state.y)
-                new_state.grid[state.y][state.x] = i + 1
+                new_state.set2(i + 1)
                 states.append(new_state)
         return states
 

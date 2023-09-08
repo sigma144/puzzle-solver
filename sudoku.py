@@ -11,7 +11,7 @@ class SudokuSolver(GridSolver):
         for i in range(1, 10):
             if self.can_place(state, state.x, state.y, i):
                 new_state = NumberGridState(state.grid, state.x, state.y)
-                new_state.grid[state.y][state.x] = i
+                new_state.set2(i)
                 states.append(new_state)
         return states
     def can_place(self, state, x, y, num):

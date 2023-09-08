@@ -1,10 +1,10 @@
-from solver import Solver, GridSolver, DIRECTIONS
+from solver import Solver, GridSolver, NumberGridState, DIRECTIONS
 
 UP_LEFT = 'a'; UP_RIGHT = 'b'; DOWN_LEFT = 'c'; DOWN_RIGHT = 'd'; RECT = '+'; DIAMOND = '.' 
 REPR = {'a':'/', 'b':'\\', 'c':'\\', 'd':'/', '+':' ', '.':' '}
 CORNERS = {'a':{'a':1, 'b':1, 'c':1, 'd':-1}, 'b':{'a':1, 'b':1, 'c':-1, 'd':1}, 'c':{'a':1, 'b':-1, 'c':1, 'd':1}, 'd':{'a':-1, 'b':1, 'c':1, 'd':1}, '+':{'a':1, 'b':1, 'c':1, 'd':1}}
 
-class ShakashakaState:
+class ShakashakaState(NumberGridState):
     def __init__(self, array, corners, x, y):
         self.grid = []
         for row in array:
@@ -48,7 +48,7 @@ class ShakashakaSolver(GridSolver):
         for move in valid_moves:
             if self.can_place(state, state.x, state.y, move):
                 new_state = ShakashakaState(state.grid, state.corners, state.x, state.y)
-                new_state.grid[state.y][state.x] = move
+                new_state.set2(move)
                 if move != DIAMOND:
                     new_state.corners[state.y+1][state.x] = CORNERS[move][DOWN_LEFT]
                     new_state.corners[state.y+1][state.x+1] = CORNERS[move][DOWN_RIGHT]
@@ -85,7 +85,7 @@ class ShakashakaSolver(GridSolver):
             if total == 2:
                 return False
         for dir in DIRECTIONS:
-            if self.on_grid(state, y + dir[1], x + dir[0]) and not self.check_triangle_count(state, x + dir[0], y + dir[1], move in [UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT]):
+            if state.on_grid(y + dir[1], x + dir[0]) and not self.check_triangle_count(state, x + dir[0], y + dir[1], move in [UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT]):
                 return False
         return True
     def check_triangle_count(self, state, x, y, add_tri):
@@ -95,7 +95,7 @@ class ShakashakaSolver(GridSolver):
         count_tri = 1 if add_tri else 0
         count_non = 0 if add_tri else 1
         for dir in DIRECTIONS:
-            if self.on_grid(state, y + dir[1], x + dir[0]):
+            if state.on_grid(y + dir[1], x + dir[0]):
                 val = state.grid[y + dir[1]][x + dir[0]]
                 if val in [UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT]:
                     count_tri += 1
