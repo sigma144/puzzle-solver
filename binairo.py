@@ -1,4 +1,6 @@
-from solver import Solver, GridSolver, BinaryGridState
+from solver import GridSolver, BinaryGridState
+
+#Broken
 
 class BinairoSolver(GridSolver):
     def solve(self, puzzle, width, height):
@@ -7,17 +9,17 @@ class BinairoSolver(GridSolver):
         for y, row in enumerate(state.grid):
             for x, num in enumerate(row):
                 if num == -1:
-                    state.grid[y][x] = 0
+                    state.set(x, y, 0)
                 elif num == 0:
-                    state.grid[y][x] = -1
+                    state.set(x, y, -1)
         self.solve_recursive(state)
     def get_next_states(self, state):
         states = []
         new_state = BinaryGridState(state.grid, state.x, state.y)
-        new_state.grid[state.y][state.x] = 1
+        new_state.set(state.x, state.y, 1)
         states.append(new_state)
         new_state = BinaryGridState(state.grid, state.x, state.y)
-        new_state.grid[state.y][state.x] = -1
+        new_state.set(state.x, state.y, -1)
         states.append(new_state)
         return states
     def check_state(self, state):
@@ -56,4 +58,4 @@ puzzle_medium = 'e0h1a1c11c00c1e0c0a0l10f0a00f1i0a0j0d1a0a1c1d0a0a0h0g1a10j00d00
 puzzle_hard = 'a00a00c1b0e0h1a1a1h0b0j11c01a1b0d1g00a0b0e1c11g10a1e0e10b0n11d00f1l0b1a1a1f0b0a0j00c1e0b11b0f1b01f0b11b0e1l0c0d11c00g0h1a0c11a1j00e0e1a01h01b11c1c0a0a0g1a0c0b1f1a0e1g0i'
 #20x20 - ID: 5355369
 
-BinairoSolver().solve(puzzle_hard, 20, 20)
+BinairoSolver().solve(puzzle_easy, 10, 10)

@@ -1,6 +1,8 @@
 from solver import Solver, GridSolver, BinaryGridState, DIRECTIONS
 from math import sqrt
 
+#Broken
+
 class HeyawakeSolver(GridSolver):
     def solve(self, board):
         regions = [r.split(',') for r in board.split(';')]
@@ -27,13 +29,13 @@ class HeyawakeSolver(GridSolver):
         states = []
         if self.can_place_white(state, state.x, state.y):
             new_state = BinaryGridState(state.grid, state.x, state.y)
-            new_state.grid[state.y][state.x] = -1
+            new_state.set(state.x, state.y, -1)
             states.append(new_state)
         if self.can_place_black(state, state.x, state.y):
             new_state = BinaryGridState(state.grid, state.x, state.y)
             new_state.grid[state.y][state.x] = 1
             if state.x < len(state.grid[0]) - 1:
-                new_state.grid[state.y][state.x + 1] = -1
+                new_state.set(state.x + 1, state.y, -1)
             states.append(new_state)
         return states
     def can_place_white(self, state, x, y):
@@ -100,7 +102,7 @@ class HeyawakeSolver(GridSolver):
         rot2 = 3 if flow_left else 1
         while True:
             dx, dy = x + DIRECTIONS[dir][0], y + DIRECTIONS[dir][1]
-            if not self.on_grid(state, dx, dy):
+            if not state.on_grid(dx, dy):
                 return None
             elif state.grid[dy][dx] == 1 or dx == startx and dy == starty + 1:
                 dir = (dir + rot1) % 4
@@ -111,6 +113,8 @@ class HeyawakeSolver(GridSolver):
             else:
                 x, y = dx, dy
                 dir = (dir + rot2) % 4
+
+#Broken
 
 puzzle_easy = 'b,1,1;b,1,1;b,1,2;2,3,2;1,2,1;2,1,4;2,3,3;b,1,2;1,1,1;b,1,2;1,1,1;1,5,1'
 #Hard 6x6 - ID: 5266560
