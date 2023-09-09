@@ -2,6 +2,8 @@ from math import sqrt
 import time
 from collections import deque
 import psutil
+from dataclasses import dataclass
+import pickle
 
 _catalog = _used = None
 class Catalog:
@@ -146,6 +148,163 @@ class Solver:
 
     def check_finish(self, state):
         return True
+
+@dataclass
+class Vec3:
+    x = 0; y = 0; z = 0
+    def __init__(self, x, y, z): self.x = x; self.y = y; self.z = z
+    def __add__(self, v): return Vec3(self.x + v.x, self.y + v.y, self.z + v.z)
+    def __sub__(self, v): return Vec3(self.x - v.x, self.y - v.y, self.z - v.z)
+    def __mul__(self, v): return Vec3(self.x*v, self.y*v, self.z*v)
+    def __neg__(self): return Vec3(-self.x, -self.y, -self.z)
+    def __repr__(self): return f"({self.x}, {self.y}, {self.z})"
+    def __iter__(self): return iter((self.x, self.y, self.z))
+    def __hash__(self): return hash((self.x, self.y, self.z))
+    def __eq__(self, v): return isinstance(v, Vec3) and v.x == self.x and v.y == self.y and v.z == self.z
+class BlockPushState:
+    _symbols = None
+    _nsymbols = None
+    _stacks = None
+    @staticmethod
+    def _sym_to_int(val):
+        result = BlockPushState._symbols.find(val)
+        if result == -1: return -BlockPushState._nsymbols.find(val) - 1
+        return result
+    @staticmethod
+    def _int_to_sym(val):
+        return BlockPushState._symbols[val] if val >= 0 else BlockPushState._nsymbols[-val - 1]
+    @staticmethod
+    def build_puzzle(puzzle, exceptions={'':[0]}):
+        if BlockPushState._stacks is not None:
+            height = max([len(l) for l in list(BlockPushState._stacks.values()) + list(exceptions.values())])
+        grid = [[[-1 for _ in range(len(puzzle[0]))] for _ in range(len(puzzle))] for _ in range(height)]
+        for y, row in enumerate(puzzle):
+            for x, val in enumerate(row):
+                if val in exceptions:
+                    for z, val in enumerate(exceptions[val]):
+                        grid[z][y][x] = BlockPushState._sym_to_int(val)
+                elif val in BlockPushState._stacks:
+                    for z, val in enumerate(BlockPushState._stacks[val]):
+                        grid[z][y][x] = BlockPushState._sym_to_int(val)
+                else:
+                    grid[0][y][x] = BlockPushState._sym_to_int(val)
+        return BlockPushState(grid, Vec3(0, 0, 0))
+    @staticmethod
+    def define_params(symbols, nsymbols, stacks):
+        BlockPushState._symbols = symbols
+        BlockPushState._nsymbols = nsymbols if nsymbols else ' '
+        BlockPushState._stacks = stacks
+    def __init__(self, grid=None, origin=None):
+        if isinstance(grid, BlockPushState):
+            grid, origin = grid._grid, grid._origin
+        self._grid = [layer[:] for layer in grid]
+        self._origin = origin
+    def __repr__(self):
+        collapse = [[-1 for _ in row] for row in self._grid[0]]
+        for layer in self._grid:
+            for y, row in enumerate(layer):
+                for x, val in enumerate(row):
+                    if val != -1:
+                        collapse[y][x] = val
+        return '\n'+'\n'.join([''.join([BlockPushState._int_to_sym(c) for c in row]) for row in collapse])
+    def __hash__(self):
+        return hash(pickle.dumps(self._grid))
+    def __eq__(self, state):
+        return self._grid == state._grid
+    def __iter__(self):
+        class BPSIterator:
+            def __init__(self, size, origin):
+                self.size = size - origin
+                self.origin = origin
+                self.pos = Vec3(-origin.x - 1, -origin.y, -origin.z)
+            def __next__(self):
+                self.pos = Vec3(self.pos.x + 1, self.pos.y, self.pos.z)
+                if self.pos.x >= self.size.x:
+                    self.pos = Vec3(-self.origin.x, self.pos.y + 1, self.pos.z)
+                if self.pos.y >= self.size.y:
+                    self.pos = Vec3(-self.origin.x, -self.origin.y, self.pos.z + 1)
+                if self.pos.z >= self.size.z:
+                    raise StopIteration
+                return self.pos
+        return BPSIterator(Vec3(len(self._grid[0][0]), len(self._grid[0]), len(self._grid)), self._origin)
+    def on_grid(self, pos):
+        return pos.x >= 0 and pos.y >= 0 and pos.z >= 0 and pos.x < len(self._grid[0][0]) and pos.y < len(self._grid[0]) and pos.z < len(self._grid)
+    def get(self, pos):
+        x, y, z = pos + self._origin
+        if z < 0: return -1
+        if z >= len(self._grid): return -1
+        if y < 0:  return -1
+        if y >= len(self._grid[0]): return -1
+        if x < 0: return -1
+        if x >= len(self._grid[0][0]): return -1
+        return self._grid[z][y][x]
+    def set(self, pos, val):
+        x, y, z = pos + self._origin
+        if z < 0: return False
+        if z >= len(self._grid):
+            self._grid = self._grid[:]
+            self._grid.append([[-1 for _ in range(len(self._grid[0][0]))] for _ in range(len(self._grid[0]))])
+            return self.set(pos, val)
+        if y < 0:
+            self._grid = [layer[:] for layer in self._grid]
+            for z in range(len(self._grid)):
+                self._grid[z].insert(0, [-1 for _ in range(len(self._grid[0][0]))])
+            self._origin = Vec3(self._origin.x, self._origin.y + 1, self._origin.z)
+            return self.set(pos, val)
+        if y >= len(self._grid[0]):
+            self._grid = [layer[:] for layer in self._grid]
+            for z in range(len(self._grid)):
+                self._grid[z].append([-1 for _ in range(len(self._grid[0][0]))])
+            return self.set(pos, val)
+        if x < 0:
+            self._grid = [[row[:] for row in layer] for layer in self._grid]
+            for z in range(len(self._grid)):
+                for y in range(len(self._grid[0])):
+                    self._grid[z][y].insert(0, -1)
+            self._origin = Vec3(self._origin.x + 1, self._origin.y, self._origin.z)
+            return self.set(pos, val)
+        if x >= len(self._grid[0][0]):
+            self._grid = [[row[:] for row in layer] for layer in self._grid]
+            for z in range(len(self._grid)):
+                for y in range(len(self._grid[0])):
+                    self._grid[z][y].append(-1)
+            return self.set(pos, val)
+        self._grid[z][y] = self._grid[z][y][:]
+        self._grid[z][y][x] = val
+        return True
+    def push(self, pos, dir): #Block push for 1x1 blocks
+        pass
+    def push_connected(self, pos, dir): #Block push for larger blocks
+        to_commit = {}
+        if not self._push_connected(pos, dir, to_commit):
+            return False
+        for p, val in to_commit.items():
+            if self.commit_push(p+dir, dir, val) is False:
+                return False
+            if p-dir not in to_commit:
+                self.set(p, -1)
+        return True
+    def _push_connected(self, pos, dir, to_commit): 
+        if not isinstance(pos, list):
+            pos = [pos]
+        pos = set(sum([[p, p+dir] + self.get_connected(p, dir, self.get(p)) for p in pos], start=[]))
+        for p in pos:
+            if p in to_commit: continue
+            result = self.can_push(p, dir, self.get(p))
+            if result is False: return False
+            if result is None: continue
+            if p.z == 0 and dir.z < 0: return False
+            to_commit[p] = self.get(p)
+            if not self._push_connected(p, dir, to_commit):
+                return False
+        return True
+    def can_push(self, pos, dir, val): #Implement in subclass
+        if val == -1: return None #Doesn't move, but can be pushed onto
+        return True
+    def commit_push(self, pos, dir, val): #Implement if blocks need to change when pushed
+        self.set(pos, val)
+    def get_connected(self, pos, dir, val): #Implement to allow blocks to be attached to each other
+        return []
 
 class BinaryGridState:
     def __init__(self, grid, x, y):
@@ -429,6 +588,9 @@ WALL_LEFT = 8
 #Open down = 11
 #Open left = 7
 
+DLEFT = Vec3(-1, 0, 0); DRIGHT = Vec3(1, 0, 0); DUP = Vec3(0, -1, 0); DDOWN = Vec3(0, 1, 0)
+DBELOW = Vec3(0, 0, -1); DABOVE = Vec3(0, 0, 1); DZERO = Vec3(0, 0, 0)
 DIRECTIONS = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+DIRECTIONS3D = [DLEFT, DRIGHT, DUP, DDOWN]
 DIRECTIONS8 = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 DIRECTIONS8_HALF = [(-1, 0), (-1, -1), (0, -1), (1, -1)]
