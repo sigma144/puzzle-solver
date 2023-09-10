@@ -23,9 +23,11 @@ class SSRState(BlockPushState):
         self.fallp = []
     @staticmethod
     def build_puzzle(puzzle, exceptions={'':[0]}, ):
+        dims = (len(puzzle[0]), len(puzzle))
         puzzle = [' '*(len(puzzle[0])+2)] + [' '+row+' ' for row in puzzle] + [' '*(len(puzzle[0])+2)]
         state = BlockPushState.build_puzzle(puzzle, exceptions)
         state.pos = state.dir = DZERO
+        state._origin = Vec3(1, 1, 0)
         state.remain = 0
         for p in state:
             if state.get(p) == PLAYER:
@@ -36,6 +38,7 @@ class SSRState(BlockPushState):
                 if state.get(p + DDOWN) == FORK: state.dir = DDOWN
             if state.get(p) >= 0:
                 state.remain += 2
+        state.dims = dims
         return state
     def can_push(self, pos, dir, val): #Override
         if val == SPACE: return None
@@ -71,15 +74,21 @@ class SSRState(BlockPushState):
                 self.legal = False
         if self.get(pos + DBELOW) == SPACE:
             self.fallp.append(pos)
+            if pos not in SSRSolver.dims:
+                if val & GETCOOK != COOKBOTTOM + COOKTOP:
+                    self.legal = False
+                    self.fallp.clear()
         self.set(pos, val)
     def fall(self):
         for p in self.fallp:
             self.push_connected(p, DBELOW)
 
 class SSRSolver(Solver):
+    dims = None
     def solve(self, puzzle, debug=0):
         self.targetpos = puzzle.pos
         self.targetdir = puzzle.dir
+        SSRSolver.dims = Vec3(puzzle.dims[0], puzzle.dims[1], 10)
         self.solve_optimal(puzzle, debug=debug, showprogress=1, diff=0)
     def get_next_states(self, state):
         states = []
