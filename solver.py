@@ -41,6 +41,7 @@ class Solver:
         state_queue = deque()
         starting_state.previous = None
         state_queue.append(starting_state)
+        prev_states.add(starting_state)
         count_iterate = 0
         depth = 0
         depth_target = 1
