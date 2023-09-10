@@ -20,8 +20,10 @@ class SSRState(BlockPushState):
         self.remain = state.remain
         self.stab = False
         self.legal = True
+        self.fallp = []
     @staticmethod
     def build_puzzle(puzzle, exceptions={'':[0]}, ):
+        puzzle = [' '*(len(puzzle[0])+2)] + [' '+row+' ' for row in puzzle] + [' '*(len(puzzle[0])+2)]
         state = BlockPushState.build_puzzle(puzzle, exceptions)
         state.pos = state.dir = DZERO
         state.remain = 0
@@ -60,22 +62,19 @@ class SSRState(BlockPushState):
                     val = val - (val & GETCOOK) + COOKBOTTOM
         if self.get(pos + DBELOW) == GRILL:
             if val & COOKBOTTOM:
-                return False
-            val |= COOKBOTTOM
-            self.remain -= 1
+                self.legal = False
+            else:
+                val |= COOKBOTTOM
+                self.remain -= 1
         if dir == DBELOW:
             if pos.z <= 1:
                 self.legal = False
+        if self.get(pos + DBELOW) == SPACE:
+            self.fallp.append(pos)
         self.set(pos, val)
     def fall(self):
-        fallp = []
-        for p in self:
-            val = self.get(p)
-            if val >= 0 and (val & GETDIR == LEFT or val & GETDIR == UP):
-                fallp.append(p)
-        for p in fallp:
+        for p in self.fallp:
             self.push_connected(p, DBELOW)
-        return self.legal
 
 class SSRSolver(Solver):
     def solve(self, puzzle, debug=0):
@@ -112,10 +111,12 @@ class SSRSolver(Solver):
                     #    newstate.set(forkp, newstate.get(forkp + d))
                     #    newstate.set(forkp + d, SPACE)
                     #    states.append(newstate)
-        states = [s for s in states if s.fall()]
+        for s in states: s.fall()
         return states
+    def check_state(self, state):
+        return state.legal
     def check_finish(self, state):
-        return state.remain <= 0 and state.pos == self.targetpos and state.dir == self.targetdir
+        return state.remain <= 0 and state.legal and state.pos == self.targetpos and state.dir == self.targetdir
 
 #ptest = SSRState.build_puzzle(
 #    ['SF#..<>'])
@@ -125,4 +126,4 @@ class SSRSolver(Solver):
 #print(ptest.pos, ptest.dir)
 
 if __name__ == "__main__":
-    SSRSolver().solve(pFieryJut, debug=0)
+    SSRSolver().solve(pLachrymoseHead, debug=0)
