@@ -2,7 +2,7 @@ from sausageroll import SSRState
 
 #World 1
 
-pBabysNeck = SSRState.build_puzzle( #48 moves
+pBaysNeck = SSRState.build_puzzle( #48 moves
     ['..#.',
      ' . .',
      '^#FS',
@@ -40,12 +40,12 @@ pInfantsBreak = SSRState.build_puzzle( #30 moves
      '  <>^  ',
      '##FSv# ',
      '##   ##'])
-pInletShore = SSRState.build_puzzle( #44 moves, takes a while
+pInletShore = SSRState.build_puzzle( #44 moves
     ['F.^.',
      'S.v#',
      '#^..',
      '.v..'])
-pLachrymoseHead = SSRState.build_puzzle( #68 moves, takes a while
+pLachrymoseHead = SSRState.build_puzzle( #68 moves, takes a wihle
     ['.###.',
      '<>^..',
      'F.v<>',
@@ -60,7 +60,7 @@ pMaidensWalk = SSRState.build_puzzle( #30 moves
      '#vF.',
      ' .S.',
      '..  '])
-pMerchantsElegy = SSRState.build_puzzle( #46 moves, takes a long time (need pruning)
+pMerchantsElegy = SSRState.build_puzzle( #46 moves
     ['.....',
      'F#^^#',
      'S#vv#',
@@ -84,7 +84,7 @@ pTheAnchorage = SSRState.build_puzzle( #112 moves!
      ' ####vvv.S',
      '          ',
      '..##      '])
-pTheClover = SSRState.build_puzzle( #62 moves, takes a long time
+pTheClover = SSRState.build_puzzle( #62 moves, takes a while
     [' <>....',
      ' ##   .',
      ' ## ##^',
