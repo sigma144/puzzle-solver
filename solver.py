@@ -162,6 +162,7 @@ class Vec3:
     def __iter__(self): return iter((self.x, self.y, self.z))
     def __hash__(self): return hash((self.x, self.y, self.z))
     def __eq__(self, v): return isinstance(v, Vec3) and v.x == self.x and v.y == self.y and v.z == self.z
+    def __contains__(self, v): return 0 <= v.x < self.x and 0 <= v.y < self.y and 0 <= v.z <= self.z
 class BlockPushState:
     _symbols = None
     _nsymbols = None
@@ -231,14 +232,10 @@ class BlockPushState:
     def on_grid(self, pos):
         return pos.x >= 0 and pos.y >= 0 and pos.z >= 0 and pos.x < len(self._grid[0][0]) and pos.y < len(self._grid[0]) and pos.z < len(self._grid)
     def get(self, pos):
-        x, y, z = pos + self._origin
-        if z < 0: return -1
-        if z >= len(self._grid): return -1
-        if y < 0:  return -1
-        if y >= len(self._grid[0]): return -1
-        if x < 0: return -1
-        if x >= len(self._grid[0][0]): return -1
-        return self._grid[z][y][x]
+        pos = pos + self._origin
+        if pos not in Vec3(len(self._grid[0][0]), len(self._grid[0]), len(self._grid)):
+            return -1
+        return self._grid[pos.z][pos.y][pos.x]
     def set(self, pos, val):
         x, y, z = pos + self._origin
         if z < 0: return False
