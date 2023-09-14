@@ -3,7 +3,7 @@ import time
 from collections import deque
 import psutil
 from dataclasses import dataclass
-import pickle
+import pickle, bisect
 
 _catalog = _used = None
 class Catalog:
@@ -162,7 +162,10 @@ class Vec3:
     def __iter__(self): return iter((self.x, self.y, self.z))
     def __hash__(self): return hash((self.x, self.y, self.z))
     def __eq__(self, v): return isinstance(v, Vec3) and v.x == self.x and v.y == self.y and v.z == self.z
+    def __lt__(self, v): return self.z < v.z if self.z != v.z else self.y < v.y if self.y != v.y else self.x < v.x
+    def __ge__(self, v): return self.z > v.z if self.z != v.z else self.y > v.y if self.y != v.y else self.x >= v.x
     def __contains__(self, v): return 0 <= v.x < self.x and 0 <= v.y < self.y and 0 <= v.z <= self.z
+
 class BlockPushState:
     _symbols = None
     _nsymbols = None
@@ -192,9 +195,10 @@ class BlockPushState:
                     grid[0][y][x] = BlockPushState._sym_to_int(val)
         return BlockPushState(grid, Vec3(0, 0, 0))
     @staticmethod
-    def define_params(symbols, nsymbols, stacks):
+    def define_params(symbols, nsymbols, dsymbols, stacks):
         BlockPushState._symbols = symbols
         BlockPushState._nsymbols = nsymbols if nsymbols else ' '
+        BlockPushStateD._dsymbols = dsymbols
         BlockPushState._stacks = stacks
     def __init__(self, grid=None, origin=None):
         if isinstance(grid, BlockPushState):
@@ -303,6 +307,78 @@ class BlockPushState:
         self.set(pos, val)
     def get_connected(self, pos, dir, val): #Implement to allow blocks to be attached to each other
         return []
+    
+class BlockPushStateD: #Separates static and dynamic state, better for large or arbitrary-size grids
+    _dsymbols = None
+    @staticmethod
+    def _set_char(pos, val, static, dynamic):
+        result = BlockPushState._symbols.find(val)
+        if result == -1: result = -BlockPushState._nsymbols.find(val) - 1
+        if val in BlockPushStateD._dsymbols: dynamic.append((pos, result))
+        else: static[pos.z][pos.y][pos.x] = result
+    _get_char = BlockPushState._int_to_sym
+    @staticmethod
+    def build_puzzle(puzzle, exceptions={'':[0]}):
+        if BlockPushState._stacks is not None:
+            height = max([len(l) for l in list(BlockPushState._stacks.values()) + list(exceptions.values())])
+        grid = [[[-1 for _ in range(len(puzzle[0]))] for _ in range(len(puzzle))] for _ in range(height)]
+        dynamic = []
+        for y, row in enumerate(puzzle):
+            for x, val in enumerate(row):
+                if val in exceptions:
+                    for z, val in enumerate(exceptions[val]):
+                        BlockPushStateD._set_char(Vec3(x, y, z), val, grid, dynamic)
+                elif val in BlockPushState._stacks:
+                    for z, val in enumerate(BlockPushState._stacks[val]):
+                        BlockPushStateD._set_char(Vec3(x, y, z), val, grid, dynamic)
+                else:
+                    BlockPushStateD._set_char(Vec3(x, y, 0), val, grid, dynamic)
+        state = BlockPushStateD(grid, dynamic)
+        state._origin = Vec3(0, 0, 0)
+        return state
+    def __init__(self, grid, dynamic=None):
+        if isinstance(grid, BlockPushStateD):
+            dynamic = grid._dynamic
+            grid = grid._grid
+        self._grid = grid
+        self._dynamic = dynamic[:]
+    def __repr__(self):
+        collapse = [[-1 for _ in row] for row in self._grid[0]]
+        for layer in self._grid:
+            for y, row in enumerate(layer):
+                for x, val in enumerate(row):
+                    if val != -1:
+                        collapse[y][x] = val
+        for p, val in self._dynamic:
+            if val != -1 and p in Vec3(len(collapse[0]), len(collapse), 10):
+                collapse[p.y][p.x] = val
+        return '\n'+'\n'.join([''.join([BlockPushStateD._get_char(c) for c in row]) for row in collapse])
+    def __hash__(self):
+        return hash(pickle.dumps(self._dynamic))
+    def __eq__(self, state):
+        return self._dynamic == state._dynamic
+    __iter__ = BlockPushState.__iter__
+    def get(self, pos):
+        i = bisect.bisect_left(self._dynamic, pos, key=lambda p: p[0])
+        if i < len(self._dynamic) and self._dynamic[i][0] == pos:
+            return self._dynamic[i][1]
+        if pos not in Vec3(len(self._grid[0][0]), len(self._grid[0]), len(self._grid)):
+            return -1
+        return self._grid[pos.z][pos.y][pos.x]
+    def set(self, pos, val):
+        i = bisect.bisect_left(self._dynamic, pos, key=lambda p: p[0])
+        if i < len(self._dynamic) and self._dynamic[i][0] == pos:
+            if val == -1:
+                self._dynamic.pop(i)
+            else: self._dynamic[i] = (pos, val)
+        elif val != -1:
+            self._dynamic.insert(i, (pos, val))
+    push = BlockPushState.push
+    push_connected = BlockPushState.push_connected
+    _push_connected = BlockPushState._push_connected
+    can_push = BlockPushState.can_push
+    commit_push = BlockPushState.commit_push
+    get_connected = BlockPushState.get_connected
 
 class BinaryGridState:
     def __init__(self, grid, x, y):
