@@ -1,4 +1,4 @@
-from solver import Solver, BlockPushState, Vec3, DIRECTIONS3D, DZERO, DLEFT, DRIGHT, DUP, DDOWN, DBELOW, DABOVE
+from solver import Solver, BlockPushState, BlockPushStateD, Vec3, DIRECTIONS3D, DZERO, DLEFT, DRIGHT, DUP, DDOWN, DBELOW, DABOVE
 from sausagerollpuzzles import *
 
 chars = '><v^RLDUrldu****'*32
@@ -10,7 +10,7 @@ RIGHT = 0; LEFT = 1; DOWN = 2; UP = 3; COOKTOP = 4; COOKBOTTOM = 8
 STABRIGHT = 16; STABLEFT = 32; STABDOWN = 48; STABUP = 64; 
 GETDIR = 0b11; GETCOOK = 0b1100; GETSTAB = 0b110000
 
-BlockPushState.define_params(chars, nchars, {'<':'.<', '>':'.>', '^':'.^', 'v':'.v', 'S':'.S', 'F':'.F', 'u':' ^', 'd':' v', 'k':' <', 'r':' >', 'f':' F'})
+BlockPushState.define_params(chars, nchars, '><v^SF', {'<':'.<', '>':'.>', '^':'.^', 'v':'.v', 'S':'.S', 'F':'.F', 'u':' ^', 'd':' v', 'k':' <', 'r':' >', 'f':' F'})
 
 class SSRState(BlockPushState):
     def __init__(self, state):
@@ -27,7 +27,6 @@ class SSRState(BlockPushState):
         puzzle = [' '*(len(puzzle[0])+2)] + [' '+row+' ' for row in puzzle] + [' '*(len(puzzle[0])+2)]
         state = BlockPushState.build_puzzle(puzzle, exceptions)
         state.pos = state.dir = DZERO
-        state._origin = Vec3(1, 1, 0)
         state.remain = 0
         for p in state:
             if state.get(p) == PLAYER:
@@ -74,7 +73,7 @@ class SSRState(BlockPushState):
                 self.legal = False
         if self.get(pos + DBELOW) == SPACE:
             self.fallp.append(pos)
-            if pos not in SSRSolver.dims:
+            if pos - Vec3(1, 1, 0) not in SSRSolver.dims:
                 if val & GETCOOK != COOKBOTTOM + COOKTOP:
                     self.legal = False
                     self.fallp.clear()
@@ -114,7 +113,6 @@ class SSRSolver(Solver):
                     push2 = newstate.push_connected(forkp + d, -newstate.dir)
                     if push2:
                         newstate.dir = d
-                        #TODO: Change fork dir
                         states.append(newstate)
                     #elif newstate.get(forkp + d) != SPACE:
                     #    newstate.set(forkp, newstate.get(forkp + d))
