@@ -1,6 +1,7 @@
 from math import sqrt
 import time
 from collections import deque
+import heapq
 import psutil
 from dataclasses import dataclass
 import pickle, bisect
@@ -36,43 +37,76 @@ class Catalog:
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     #Implement __hash__ and __eq__ for states
-    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False, showprogress=False):
-        prev_states = set()
-        state_queue = deque()
+    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False, showprogress=False, use_score=False):
+        print("Solving...")
+        start_time = time.time()
+        starting_state = self.setup(starting_state)
         starting_state.previous = None
+        prev_states = {starting_state}
+        state_queue = deque()
+        if use_score:
+            starting_state._invalidate = False
+            prev_states = {starting_state: (starting_state, -1, starting_state.state_score)}
         state_queue.append(starting_state)
-        prev_states.add(starting_state)
         count_iterate = 0
         depth = 0
         depth_target = 1
         depth_time = time.time()
         depth_last = 0
-        print("Solving...")
-        start_time = time.time()
+        best_state = None
+        best_score = None
+        def finish_solve(state):
+            elapsed = time.time() - start_time
+            move_list = self.trace_moves(state, prnt, diff, diff_trail)
+            print("Solved in", len(move_list)-1, "moves!")
+            if self.score_state(state) is not None:
+                print("Score:", str(self.score_state(state)))
+            print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+            return move_list
         while len(state_queue) > 0:
             count_iterate += 1
             state = state_queue.popleft()
-            next = self.get_next_states(state)
+            if debug: print(state, ": Current")
+            if use_score and state._invalidate:
+                next = []
+            else:
+                next = self.get_next_states(state)
+            hint = 0
+            if debug:
+                for i, s in enumerate(next):
+                    print(s, ": "+str(i+1))
+                hint = input() or 0
+                if hint: next = [next[min(int(hint) - 1, len(next) - 1)]]
             for s in next:
                 s.previous = state
                 if self.check_finish(s):
-                    elapsed = time.time() - start_time
-                    move_list = self.trace_moves(s, prnt, diff, diff_trail)
-                    print("Solved in", len(move_list)-1, "moves!")
-                    print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-                    return move_list
+                    if not use_score: return finish_solve(s)
+                    score = self.score_state(s)
+                    if best_score is None or score > best_score:
+                        best_state = s
+                        best_score = score
             for s in next:
-                if self.check_state(s) and len(prev_states) != (prev_states.add(s) or len(prev_states)):
+                if not self.check_state(s): continue
+                if use_score:
+                    s._invalidate = False
+                    if s in prev_states and not hint:
+                        s2, depth2, score2 = prev_states[s]
+                        if depth == depth2 and self.score_state(s) > score2:
+                            s2._invalidate = True
+                        else: continue
+                    prev_states[s] = (s, depth, self.score_state(s))
+                    state_queue.append(s)
+                elif len(prev_states) != (prev_states.add(s) or len(prev_states)) or hint:
                     state_queue.append(s)
             if count_iterate == depth_target:
+                if use_score and best_state is not None:
+                    return finish_solve(best_state)
                 depth += 1
                 elapsed = time.time() - depth_time
                 time_diff = elapsed - depth_last
                 depth_last = elapsed
                 depth_time = time.time()
                 print("Depth "+str(depth)+'...'+"{:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-                if debug:
-                    input(state_queue)
                 depth_target = count_iterate + len(state_queue)
             if count_iterate % 20000 == 0:
                 if showprogress:
@@ -141,6 +175,9 @@ class Solver:
 
     #Recursive/optimal solving functions
 
+    def setup(self, state):
+        return state
+
     def get_next_states(self, state):
         return []
 
@@ -149,6 +186,9 @@ class Solver:
 
     def check_finish(self, state):
         return True
+    
+    def score_state(self, state):
+        return None
 
 @dataclass
 class Vec3:
@@ -275,7 +315,13 @@ class BlockPushState:
         self._grid[z][y][x] = val
         return True
     def push(self, pos, dir): #Block push for 1x1 blocks
-        pass
+        result = self.can_push(pos, dir, self.get(pos))
+        if result is False: return False
+        if pos.z == 0 and dir.z < 0: return False
+        next = pos+dir
+        if not self.push(pos, next): return False
+        if self.commit_push(next, dir, self.get(next)) is False: return False
+        self.set(next, -1)
     def push_connected(self, pos, dir): #Block push for larger blocks
         to_commit = {}
         if not self._push_connected(pos, dir, to_commit):
@@ -394,6 +440,8 @@ class BinaryGridState:
                string += "0" if char == 1 else '-' if char == -1 else "." 
             string += "\n"
         return string
+    def __hash__(self):
+        return hash(pickle.dumps((self.grid, self.x, self.y)))
     def on_grid(self, x, y):
         return x >= 0 and y >= 0 and x < len(self.grid[0]) and y < len(self.grid)
     def set(self, x, y, val):
@@ -416,6 +464,8 @@ class NumberGridState:
                string += chr(char - 10 + ord('A')) if char > 9 else str(char) if char > 0 else "-" 
             string += "\n"
         return string
+    def __hash__(self):
+        return hash(pickle.dumps((self.grid, self.x, self.y)))
     def on_grid(self, x, y):
         return x >= 0 and y >= 0 and x < len(self.grid[0]) and y < len(self.grid)
     def set(self, x, y, val):
