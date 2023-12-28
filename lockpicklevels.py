@@ -173,9 +173,9 @@ p42x = parse('Gpp|@Pg@P0@G0$|pg3G5|G4g5|PGg2')
 p43x = parse('m|Bxb2|#B4b6|B3b3|#B0B6m|#W$|B2b3|b=0Bb2')
 p44x = parse('mMm3M2(M6M0$|W3w8W2m2|W8m|c12C0Cxm|M2(C6m2|C8cm|C4mM4m7')
 p45x = parse('ok(Oxo|Kxk2|K3o|W0p4|o=0Oxo2)|O3kopcm3|Kk2P2P2W2W2(M0M4$|KM0K0m|CM0C0m|OM0O0m|PM0P0m')
-p4Bx = parse('mrb3g5(Rg=4b=2r=1|Gb=2r=0g=5|Br=0g=4b=3|Gx#BxBGxBB0#R@GxB0m2|!R0@G0#B0m2|(G5G0|m=0R0B0G0R2B3)!@#M4$', special='4-BX') #Takes a while
+p4Bx = parse('mrb3g5(Rg=4b=2r=1|Gb=2r=0g=5|Br=0g=4b=3|Gx#BxBGxBB0#R@GxB0m2|!R0@G0#B0m2|(G5G0>|m=0R0B0G0R2B3)!@#M4$') #Takes a while
 p4Cx = parse('m14(M0P0K0C0$|P2p18M4C3W4K2|K2k14K3C5P8K8|C2c12P4W2K4C4|pW8m|P4|P8') #Takes a bit
-#p61x = parse('BxB-xBxB-xBxB-xBxB-x$|b8(B4b-5B0B3(b4B4B0b-3B2b4|B-4B0(B2b3|b6(B2b3<>|B-4B0)))|B2b3(B2B-2b-4<>|Bx#B-x))(B4b4B2b-9B-5b12|B4B0bB2B-3b-5)')
+p61x = parse('b8|BxB-xBxB-xBxB-xBxB-x$|B2(b3(B2B-2b-4))|B4b-5B0B3(b4B4B0b-3B2b4|B-4B0(B2b3|b6(B2b3|B-4B0(B4b4B2b-9B-5b12|B4B0bB2B-3b-5'); add_edge(p61x, 1, 'B2', 5); add_edge(p61x, 3, 'Bx#B-x', 11) #Takes a while (3.5 min)
 p62x = parse('GxG-xGxG-xGx@G-x$|G2g3@G3g-6@G0g6|g6|@G0@G0@G0@G0@G0@G0g-1|G2g3@G0g-3G3|G2g3@G0g-3G3|G3g2G-5g6|G3g2G-5g6|G3@G0G-3@G0g6G6')
 p63x = parse('(u-5U-6|!N-4@G0R12B6)$|!W5b2G2gB3uR-2b|K3n8N0g2!Gxr-2b|M2gG0b2R|U-1r11G2BB0Gxu-5|G@Pn-4B2u|C8g2U-2U0b6|U-5m6@R2u-1|#R0@O0B0um')
 p9x = parse('g-5([N-xGxU0]m|[NxG-xU0]m|@M50@G-5U/[M0N0G0]$|[N-xN-x]|[GxGx]|G/N-5|N/G-5|[MxMx]g5|[NxNx]n5')
@@ -191,7 +191,7 @@ p117x = parse('c6+4i(C4X1+1i|c-6C0m-3ic-15(c-xi|cxiC0$|C2|C-1|C8|C-4i')
 #p11Ax = parse('[N=N=]|m3+3i([C=C=]|U/MxU/M+U/M-xU/M-+U/MxU/M+U/M-xU/M-+$|(n3|c3+3i)(M/C3|M/C-3)') I-Combo not supported
 
 #Keypick 100
-k13 = parse('wwOO$|Wo|Ww|Wo|Ww(Ow|Wo')
+k13 = parse('wwOOU5$|Wou|Wwu|Wou|Ww(Owu|Wou') #Bonus
 k14 = parse('w(P$|Ow|Wo|Op|Wc|Ol|Ww')
 k15 = parse('w(WW$|WwOw|WoWww')
 k16 = parse('w|WwwOww|WpwWoc|WWW$')
@@ -202,7 +202,7 @@ k22 = parse('w(WpPoOU6$|OwPpWou|WwOoPpu|WwPoOpu|OpWoPwu|PpOwWou|WoPpOwu') #Bonus
 k23 = parse('wog(WOOoog|WWGwww|WGGwwg|OGGwwo|OOGggg|WOGogg|WWOwgg|WWWwoo|GGG$')
 k24 = parse('w(P$|Wo|Ow|Ooo|Ooo|WOWp|WwOw')
 k25 = parse('OOwwWg|w|WWgoWg|w|OOwwGo|GG$|WWgoGo')
-k27 = parse('OpPpGoGgPP$|o2|GGp2OGo2Wp2|OOg2|OPo2PPg2OOp2')
+k27 = parse('OpPpGoGgPP$|o2w|GGp2OGo2Wp2|OOg2|OPo2PPg2OOp2') #Bonus white door skip
 k30 = parse('w|Ow2|O4w6|Wo2|O3w4|W2o4|W6$')
 k32 = parse('w4(W3oW3$|W2wO3w5|W2w2W2w3|W2wW2o2|W2w2O2o3|W2w2W2o|W2w2O3w3')
 k33 = parse('wWw2W2w4W4W2w7|Ww3W3w5W2W3W2w8|Ww2W2w6W6W2w9|WW2W3W4W6$')
@@ -268,3 +268,8 @@ k96 = parse('wwww|oooo|cccc|kkkk|L/[OCK0W3]cw-3|L/[W0CKO3]wo-3|L/[C3KO0W2]oc-3|L
 k97 = parse('m(L/[O0W2KC3U0]mL/[W0CKO3U0]mL/[W2O2C2K5U0]|Wk2Ok|Oc3Ww2Ck-1Wo2Ww-3Kc2|CwKc2Ok2WoO0cKw2|Ko2W0o2Wc-2C0o-1Ok2|Lw4Kk2O0kW0c-1Cw2|L-2L-2L-2L-2L-2L-2L-2L-2$') #Takes a bit (22 sec)
 k98 = parse('m|[B-2R-2G-4U0][G2R2B4U0][B2R2G4U0][G-2R-2B-4U0]M8$|L-8b2G0r-8G4g-2G6m5|G-4g4B-4r-4G-4g6#R-4m5|G4g-8R0b-6B4r6!G-6g4')
 k99 = parse('w3(CkPgGbGcRpBG|OpBgCgGoGrB|G0cKbOrGgBk|C0oPgGbGcB|O0gBgBgGo|GbKgRgGr|!Wb#Wg@Wb|[L0R0P0B0K0O0G0C0W0]$')
+kex1 = parse('g(OoGoGgOgOoGggOGoo|GGo|OgGoOg|OoGo|GoOg|GGG$|GGogOOggOo(OgOoOg|Og|GoGoGoo|OgOgGoo|OoOgOg')
+kex2 = parse('p(GpGOggPPoGGpOO$|PgGpGp|OgPgPpGgPOo(GpOpg|PgOgPo|PoGgo)|PpGp|GpGgPpGpGgPpGoPg|PgPg|GgPpGgPpGoPgPpOpp|OgPo|OgPpGpGoPgPoGpOpo')
+kex3 = parse('Go(PgOgGpGo|OcCCpPPoGGcPPpOO$)|cGpGcPgPcOgPcO(PgOcGpc|pPoGpCpp)|CoPgGcCgGpGpGo|CgPgOpGpGgOoPc|PgCoCpGpOgCoCgOg(PcCoo|PoCpp|PcOgg)')
+kex4 = parse('(OcCgGoCkK|KoPpPoCpG)(CgOoGgPpKgk|PpGgOoCo|(CoP|gGcO)(KkGOcc|gPCGO$))|(kOpGcOpGcO|KkPgCpGgO)(KcPcGpKgCpo|pKpGoKgPgCpc)|OoCpPcGoOgPgGgPcOoPGkk')
+kex5 = parse('W(oGpOgPoOcPw|OgPoGkKpCgG(OoGWco|pKKK$))|(wCkOkCgPgCcKwO|WcKwGpCcGgPpK)oCkWkCcc|(KcGcKoOpOoCk|CkCwOpGoPcK)PpOoGgWgo'); add_edge(kex5, 6, 'WkCkCgOpPgGkP', 8)

@@ -479,9 +479,6 @@ class LockpickSolver(Solver):
         elif self.special == '10-B':
             if state.last_move == 10 and prev.edges[9][1] and Catalog.get(prev.edges[9][1][0])[2] == '0':
                 return False
-        elif self.special == '4-BX':
-            if prev.last_move == 8 and len(state.edges[7][1]) > 0:
-                return False
         return True
     def check_finish(self, state):
         return state.win
@@ -614,7 +611,7 @@ def test(full=False, print_moves=False):
     print("\033[92mTest Complete in {:.2f} seconds.\033[00m".format(elapsed))
 
 if __name__ == "__main__":
-    test(full=0, print_moves=0) #Time: ~83 sec
+    #test(full=0, print_moves=0) #Time: ~83 sec
     #practice()
 
-    #LockpickSolver().solve(k99, verbose=0, debug=0, showprogress=1)
+    LockpickSolver().solve(p61x, verbose=0, debug=0, showprogress=1)
