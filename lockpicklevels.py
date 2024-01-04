@@ -24,6 +24,7 @@ p27 = parse('w15o15c15(C2W8C4|CO6C12|W2O2C2|O4|W0O0C0$|(C6|W2O12C2)(C3OW3W|W6O)'
 p28 = parse('o3p3c3(C3P3O3m|O12o3p3O3c3P3o3P3o3|O3p3O3p3P6o3o3O6o3c3|C3c3P6o3c3C3p3O3p3C3p3|C6c6O6o6P3P3C3$', 10)
 p29 = parse('o24(O24W3w5|O2o2O4(W8o2|Ow2|O4o4w4|W2oO2W0o4W2(O0WW0$|O8|O6W2w2|O0w4|O2W6o2w8|W0w4o6|O8', 15)
 p210 = parse('o(O0o|OoP2c|OoC2p2|Oc|Po4|O0(P2p2C2O0P0$|Oc2Po2|PCpO2c2', 12, special='2-10') #Bridge edge case
+p210i = parse('o(O0o|OoP2c|OoC2p2|Oc|Po4|O0(P2p2C2O0P0$|Oc2Po2|PCpO2c2^', 12, special='2-10') #Likely intended solution
 p2A = parse('m3w2k2o2c3p4(RW|KO)(CC|OK)(OK|WP)(CC|WO)(OR|OW)(PP|KO)(OR|RW)(CC$|PP$)', 9)
 p2B = parse('m(O4mK2mp4|W2k24w3|K24(C2k2W8wc|W3mWCR$|P4m', 10)
 p2C = parse('m3p16o3((O2(|(O2P4|O2o6|O2P2))O4P2|O4(|(P4o|P0P0P0P0$))O2)(O2p2o6|OOOOO3P3P6)', 12)
@@ -90,7 +91,7 @@ p710 = parse('m3b-5o8c9(M/C0M/O0M/B0$|B-3B4O/B5|B-xC-2#C3|CO4M/B-1b5B2O/B3C3|B/M
 p7A = parse('p4(P/C-xC/Px|C-4P/C-xP/C-x|P24P/C-x|P2C/Px|PC/Px|P8C/PxP/C-xC/Px|PxP/C-x|C-xC/Px|C-2P/C-x|P256$', 11) #Max possible score is 568
 p7B = parse('o4(n17|N-3!N0$|N/O5u7O-4r|O/N8o-R2|O4r-2R2o=4|N!N-1|U/R-1UU0r2r=0N/O4|U/R-1U2U0r-r=0N/U7', 11)
 p7C = parse('m1m*(U3@C-8$|G/PC2G/P-1G/PN3G/P2P-3P2p-u|P-4P/G2G-5G/PP2W4pu|RP/G-2G/P-4P/G-1G-4G/P-4G/P-1p-4u', 7)
-p7D = parse('!W12$|C2C0O2w2|KC2Ow2|KR2w2|K12|o10k10c10(NN0K0O0C2w6|NC3KO6|OKk2|C4n13|N/K4rN8w6', 16) #Takes a bit (0.7 min)
+p7D = parse('!W12$|C2C0O2w2|KC2Ow2|KR2w2|K12|o10k10c10(NN0K0O0C2w6|NC3KO6|OKk2|C4n13|N/K4rN8w6', 16, passing_effect=[0]) #Takes a bit (0.7 min)
 p7E = parse('c-|o-|p-|cccccccc|oooooooo|pppppppp|>(W/Cx|W/C-x)(W/OxW/Ox|W/O-xW/O-x)(W/PxW/PxW/Px|W/P-xW/P-xW/P-x)W17W0' + 
     '(W/Px|W/P-x)(W/CxW/Cx|W/C-xW/C-x)(W/OxW/OxW/Ox|W/O-xW/O-xW/O-x)W2W0(W/Ox|W/O-x)(W/PxW/Px|W/P-xW/P-x)(W/CxW/CxW/Cx|W/C-xW/C-xW/C-x)W17W0$', 18, special='7-E')
 
@@ -122,12 +123,12 @@ p102 = parse('w3c2(PPZC0$|WoWzOw|WoZpWo|WoWc*Ow|OO0C|WW0C', 10)
 p103 = parse('w7o6B/[W0O0P0C0]$|C0O0P/Z16|O4O0Z|c6W/P0([ZZZZZZ]W4|OO0Z|p16P0|WP0|OC/O0)', 19, special='10-3') #Bridge special case
 p104 = parse('mK0W0k6Z3Z3m2(w6|k10|b3|m-2U3[B0W0K0M0]$|WZBZBZu|WZ5K2Ku|BB5Wu', 17)
 p105 = parse('B0p3n-4u|P-2n-|Cn*|Z-4|P3b-4u|P-3n-8|p-8P0b3|Z-8|U2U/[B0N0]$', 12) #Preservation
-p106 = parse('w50u-7(U-2p*o*w-50|U-2o-7O-1n6|U-2o-4O-6O0P5|U-2p5P6P0O-4|U-2M-1m*n*z50|N0(W0u-4m-1|Z50$', 11, special='10-6') #Passing curse
+p106 = parse('w50u-7(U-2p*o*w-50|U-2o-7O-1n6|U-2o-4O-6O0P5|U-2p5P6P0O-4|U-2M-1m*n*z50|N0(Z50$|W0u-4m-1', 11, passing_effect=[7]) #Passing curse
 p107 = parse('N/W6|M/W6|w6n=0|K0k51W/[M0N0U0CZ50]$|[KU0]M6c|[KxU0]c|z-m-', 12)
 p108 = parse('o12O/[](W/[]O/[]C/[]|W/[](U64$|W20u20|Z4Z3u7|z24|z19|z9|Z8Z4Z3u15|O14u14|C8u8', 15)
 p109 = parse('z17Z0Z0Z0$|Z/[O2P2]m|Z/[W2O2]m|w18O12Z4|p26P8Z16Z4|(K4W4|C4Z4|>)z*|(o10O4n10>|P4W8Z).') #Timeout + one way drop issue
 p1010 = parse('u4m-1m3M/[OxGxBxRxU0]$|U[Z-xZ-x]|U[ZxZxZx]|UZ/Mx|UZ/U|UZ/[OOOO]|U[NxN-x]|UO/[]R/[]G/[]B/[]|UM/[]N/[]M/[]N/[]', 30, max_stacks=2) #Takes a long time (7 min)
-p10A = parse('Z|Z2|Z4|Z8|Z16|Z32|Z64|B/[M-1U]|uK[M-1U]|C/[M-1U]|m-3nn-2|u-1k43b92c5W/[B0K0C0U0]$', special='10-A') #Passing curse, timeout
+p10A = parse('Z|Z2|Z4|Z8|Z16|Z32|Z64|B/[M-1U]|uK[M-1U]|C/[M-1U]|m-3nn-2|u-1k43b92c5W/[B0K0C0U0]$', special='10-A', passing_effect=[0, 1, 2, 3, 4, 5], max_stacks=2) #Timeout
 p10B = parse('(>m-1>|>k-1>|>c-1>)w*(m=0Z/W5[Z-5U0]$|n-|Ck*n=0Cw-*|Kc*n=0Kw-*|Mn*k4c4w5|N0|n2', 11, special='10-B') #Brown bridge special case
 p10C = parse('c50b-90m-1m*(z-b-z-|[C10Zx]|[B-20Z-x]|O/[C0B0U0]$|n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10n10', 25, max_stacks=2) #Takes a very long time (15 min)
 
@@ -167,6 +168,7 @@ p25x = parse('w2(O2W3o|W2w4o2|W2O2w4o2|W4w2W4(O8O0WW0$|W2o4W2|O0o2w10|O6o8W4W2')
 p31x = parse('w23o25(W12Ox|O12Wx|(W5OO6|W8WO5|O5W5O5|O5W8)W0O0$') #Cheese
 p32x = parse('WW0w=1W2W0WW0w=1W2W0$|w2(W0w2W2W2|(w2w=1w2|W2W)(W6w=6|w4|W2w2W')
 p3Cx = parse('w3k7(WxW0k6|W2K12|K6|K12k24K3m|K3k=7K6w|K2k6|W2k6|W0W0K3K|K0K0K3K3$') #Cheese
+p3Cxi = parse('w3k7(WxW0k6^|W2K12^|K6^|K12k24K3m^|K3k=7K6w^|K2k6^|W2k6^|W0W0K3K^|K0K0K3K3$')
 p3Dx = parse('m3((m=0Oo2CcOm=0|m=0k4m=0|).|W2m=0o|Cw2|CcWNKW0O0K0$|m=0CcC0O0o3|K2wO3K') #Cheese
 p41x = parse('w6m|Oow3|W2Cr|!W6R$|W8oWOc')
 p42x = parse('Gpp|@Pg@P0@G0$|pg3G5|G4g5|PGg2')
@@ -177,7 +179,9 @@ p4Bx = parse('mrb3g5(Rg=4b=2r=1|Gb=2r=0g=5|Br=0g=4b=3|Gx#BxBGxBB0#R@GxB0m2|!R0@G
 p4Cx = parse('m14(M0P0K0C0$|P2p18M4C3W4K2|K2k14K3C5P8K8|C2c12P4W2K4C4|pW8m|P4|P8') #Takes a bit
 p61x = parse('b8|BxB-xBxB-xBxB-xBxB-x$|B2(b3(B2B-2b-4))|B4b-5B0B3(b4B4B0b-3B2b4|B-4B0(B2b3|b6(B2b3|B-4B0(B4b4B2b-9B-5b12|B4B0bB2B-3b-5'); add_edge(p61x, 1, 'B2', 5); add_edge(p61x, 3, 'Bx#B-x', 11) #Takes a while (3.5 min)
 p62x = parse('GxG-xGxG-xGx@G-x$|G2g3@G3g-6@G0g6|g6|@G0@G0@G0@G0@G0@G0g-1|G2g3@G0g-3G3|G2g3@G0g-3G3|G3g2G-5g6|G3g2G-5g6|G3@G0G-3@G0g6G6')
-p63x = parse('(u-5U-6|!N-4@G0R12B6)$|!W5b2G2gB3uR-2b|K3n8N0g2!Gxr-2b|M2gG0b2R|U-1r11G2BB0Gxu-5|G@Pn-4B2u|C8g2U-2U0b6|U-5m6@R2u-1|#R0@O0B0um')
+p62xi = parse('GxG-xGxG-xGx@G-x$|G2g3@G3g-6@G0g6^|g6|@G0@G0@G0@G0@G0@G0g-1^|G2g3@G0g-3G3^|G2g3@G0g-3G3^|G3g2G-5g6|G3g2G-5g6^|G3@G0G-3@G0g6G6^')
+p63x = parse('u-5U-6$|!N-4@G0R12B6$|!W5b2G2gB3uR-2b|K3n8N0g2!Gxr-2b|M2gG0b2Rx|U-1r11G2BB0Gxu-5|G@Pn-4B2u|C8g2U-2U0b6|U-5m6@R2u-1|#R0@O0B0um')
+p63xi = parse('u-5U-6$|!N-4@G0R12B6$|!W5b2G2gB3uR-2b^|K3n8N0g2!Gxr-2b^|M2gG0b2Rx^|U-1r11G2BB0Gxu-5^|G@Pn-4B2u^|C8g2U-2U0b6^|U-5m6@R2u-1^|#R0@O0B0um^') #Possible intended solution, takes a very long time (20 min)
 p9x = parse('g-5([N-xGxU0]m|[NxG-xU0]m|@M50@G-5U/[M0N0G0]$|[N-xN-x]|[GxGx]|G/N-5|N/G-5|[MxMx]g5|[NxNx]n5')
 p10x = parse('w5W5(Z5$|n2(n-1|R(Gn|Zp(Wp5|Kw5|Pk5')
 p111x = parse('w3(w2iW/C-i|WiW(w1i|C/W2i|c-|C2iW3i$')
@@ -185,10 +189,10 @@ p112x = parse('p4+3i|p-1-2i|[P4P3i]([P1P1i][P1P1]P0$|[P-2iP-2i][P-1P-1]|[P-1P1i]
 p113x = parse('k4+7iK+k3iKxk-K-+k10+10i(K0$|(k-30+25i|k3+13i|k-2-2i)(LK+|(k10|k-50+50i|k-5i|l)(LKx|k2-30i|k-5+6i|k1+1i')
 p114x = parse('w5+2iwxiwxiwxiwxi(g-5@W0$|WW/P=|P-+gxi|P-1pxi|W-+gxi|(P/W+w-xiP/Wx|).')
 p115x = parse('rrrrrrrr|rxirxirxi|>RR-ic6(Cr-xiC|CrxiC)R-1R-1(Cr-C|CrxiC)RRi(Cr-C|Cr-xiC)RR-i$')
-#p116x = parse('l-1M-1(L-1u|m2)|U5$|M3u|n-|M3u|nxi|[N10UL-1]u|m3([GxGxG12GxGx]n10|L/U3(M3u|nxi') Passing curse not supported
+p116x = parse('l-1M-1(L-1u|m2)|U5$|M3u|n-|M3u|nxi|[N10UL-1]u|m3([GxGxG12GxGx]n10|L/U3(M3u|nxi', passing_effect=[1, 4, 6, 12])
 p117x = parse('c6+4i(C4X1+1i|c-6C0m-3ic-15(c-xi|cxiC0$|C2|C-1|C8|C-4i')
-#p118x = parse('nn-n-|u*(W/[K7K7i]u|[W0N0M0P0U]$|m-3M/P=u-*|p|k7+7ikikiki|pxipxipxip=0') I-Combo not supported
-#p11Ax = parse('[N=N=]|m3+3i([C=C=]|U/MxU/M+U/M-xU/M-+U/MxU/M+U/M-xU/M-+$|(n3|c3+3i)(M/C3|M/C-3)') I-Combo not supported
+p118x = parse('nn-n-|u*(W/[K7K7i]u|[W0N0M0P0U]$|m-3M/P=u-*|p|k7+7ikikiki|pxipxipxip=0') #Cheese
+p11Ax = parse('[N=N=]|m3+3i([C=C=]|U/MxU/M+U/M-xU/M-+U/MxU/M+U/M-xU/M-+$|(n3|c3+3i)(M/C3|M/C-3)', max_stacks=1, special='11-AX') #Takes a very long time (35 min)
 
 #Keypick 100
 k13 = parse('wwOOU5$|Wou|Wwu|Wou|Ww(Owu|Wou') #Bonus

@@ -58,3 +58,4 @@ Auras (place before door):
 Other:
 > or <      One-way drop
 $           Goal
+^           Go to this point before goal (for testing alternate solutions)
