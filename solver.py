@@ -704,13 +704,16 @@ class GridSolver:
         return [[state.grid[y][x] for x, y in region] for region in self.get_all_region_points()]
 
 
-def parse_edges(edgestr, close_empty_edges=True):
+def parse_edges(edgestr, place_endpoints=False, close_empty_edges=True):
     global _roomi
-    _roomi = 1
-    edges = _parse_edges(0, [c for c in edgestr], None)
+    _roomi = 2 if place_endpoints else 1
+    edges = _parse_edges(0, [c for c in edgestr], 1 if place_endpoints else None, place_endpoints)
     if close_empty_edges: edges = epsilon_closure(edges)
+    roomi = [e[0] for e in edges if e[0] is not None] + [e[2] for e in edges if e[2] is not None]
+    roomi = sorted(list(set(roomi)))
+    edges = [(roomi.index(s) if s is not None else s, c, roomi.index(e) if e is not None else e) for s, c, e in edges]
     return edges
-def _parse_edges(start, edgechar, end):
+def _parse_edges(start, edgechar, end, place_endpoints=False):
     global _roomi
     new = []
     edge = ''
@@ -731,7 +734,10 @@ def _parse_edges(start, edgechar, end):
             if not (edgechar and edgechar[0] not in ')|'):
                 for i, e in enumerate(newedges):
                     if e[2] == newend:
-                        newedges[i] = (e[0], e[1], None)
+                        if place_endpoints:
+                            newedges[i] = (e[0], e[1], _roomi)
+                            _roomi += 1
+                        else: newedges[i] = (e[0], e[1], None)
             new += newedges
             newstart = newend
         if c not in '|() ':
