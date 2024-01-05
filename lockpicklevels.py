@@ -35,7 +35,7 @@ p32 = parse('c4(P8$|CkKp|CkKp|CkKp|CkK0p|KKxc4|CkK0p|CkK0p|CkKp|CkK0p', 15) #Tak
 p33 = parse('c6w20o40(C6Wx|C6Ox|(O24W5|WO5O|O5W5)(W5O2W|W4OO5|W5W5)O5O2W5W2O0W0$', 8)
 p34 = parse('w3w=1Ww3(Ww=3|Ww=2|WW3W2$', 7)
 p35 = parse('Oo3c4|O4c4|O3o3c4|C24$|O2o4c4|O6o=3c4|O5o5c4|o3OOOo3', 9)
-p36 = parse('w2(WW0w=8WW0w=5W2W0w=50WW0$|W0w4W2w4|W2w4W2w8|(W6|W2w=2)(W2W1|W2W0w8|W0(W8w=1|W24w', 16)
+p36 = parse('w2(WW0w=8WW0w=5W2W0w=50WW0$|W0w4W2w4|W2w4W2w8|(W6|W2w=2)(W2W|W2W0w8|W0(W24w|<>W2w8|W8w=1', 16)
 p37 = parse('p=6p=4p=5p=8p=6p=2p=3p=2c|P6P0(P3P0P2P0Pxc|(P4P0|P5P0)(P8P0c|P2P0C3P0$', 14)
 p3A = parse('w(Kwc3|C2w|WkWkWkCc|KwWkOww|WkKw|WWW$|CxKwKwKkWwCo', 16)
 p3B = parse('p4((Pp=0WwPp=0Oo=0Pp=0PoO|).|PoPp=0o|OoOp|PpWow|Ow=0Www|WW$', 15)

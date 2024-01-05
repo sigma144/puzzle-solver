@@ -1,4 +1,4 @@
-from solver import Solver, Catalog
+from solver import Solver, Catalog, parse_edges
 from lockpicklevels import *
 import re, time
 import pickle
@@ -311,13 +311,9 @@ class LockpickState:
         return next_states
 
 pattern = r'([_!#@]*)((?:[A-WYZ]/)?(?:[a-hj-wyzA-WYZ$<>^]|\[[^\[]*\]))(-?\d*i?(?:[\+-]\d*i)?X-?\d+(?:[\+-]\d*i)?|-?xi?|-?\+|=?-?\*?\d*i?(?:[\+-]\d*i)?)'
-roomi = 0
 
 def parse(level, target_moves=0, max_stacks=100, special=None, passing_effect=None):
-    global roomi
-    roomi = 1
-    edges = parse_edges(0, [c for c in level], None)
-    edges = epsilon_closure(edges)
+    edges = parse_edges(level)
     state = LockpickState({0}, {}, [])
     state.target_moves = target_moves
     state.mimic = None
@@ -330,46 +326,6 @@ def parse(level, target_moves=0, max_stacks=100, special=None, passing_effect=No
         parse = parse_locks(state, s)
         state.edges.append((a, parse, b))
     return state
-def parse_edges(start, edgechar, end):
-    global roomi
-    new = []
-    edge = ''
-    newstart = start
-    while edgechar and edgechar[0] != ')':
-        c = edgechar.pop(0)
-        if c == '|':
-            new.append((newstart, edge, end))
-            edge = ''
-            newstart = start
-        if c == '(':
-            new.append((newstart, edge, roomi))
-            edge = ''
-            newstart = roomi
-            newend = roomi + 1
-            roomi += 2
-            newedges = parse_edges(newstart, edgechar, newend)
-            if not (edgechar and edgechar[0] not in ')|'):
-                for i, e in enumerate(newedges):
-                    if e[2] == newend:
-                        newedges[i] = (e[0], e[1], None)
-            new += newedges
-            newstart = newend
-        if c not in '|().':
-            edge += c
-    if edgechar: edgechar.pop(0)
-    new.append((newstart, edge, end))
-    return new
-def epsilon_closure(edges):
-    epsilon = [e for e in edges if len(e[1]) == 0 and e[2] is not None]
-    edges = [e for e in edges if len(e[1]) > 0]
-    initial_edges = edges[:]
-    for start, _, end in epsilon:
-        for i, e in enumerate(edges):
-            if e[0] == end: edges[i] = (start, e[1], e[2])
-            if e[2] == end: edges[i] = (e[0], e[1], start)
-    if edges != initial_edges:
-        return epsilon_closure(edges + epsilon)
-    return edges
 def parse_complex(num):
     num = num.split('+')
     if len(num) == 2:

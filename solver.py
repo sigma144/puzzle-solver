@@ -703,6 +703,54 @@ class GridSolver:
     def regions(self, state):
         return [[state.grid[y][x] for x, y in region] for region in self.get_all_region_points()]
 
+
+def parse_edges(edgestr, close_empty_edges=True):
+    global _roomi
+    _roomi = 1
+    edges = _parse_edges(0, [c for c in edgestr], None)
+    if close_empty_edges: edges = epsilon_closure(edges)
+    return edges
+def _parse_edges(start, edgechar, end):
+    global _roomi
+    new = []
+    edge = ''
+    newstart = start
+    while edgechar and edgechar[0] != ')':
+        c = edgechar.pop(0)
+        if c == '|':
+            new.append((newstart, edge, end))
+            edge = ''
+            newstart = start
+        if c == '(':
+            new.append((newstart, edge, _roomi))
+            edge = ''
+            newstart = _roomi
+            newend = _roomi + 1
+            _roomi += 2
+            newedges = _parse_edges(newstart, edgechar, newend)
+            if not (edgechar and edgechar[0] not in ')|'):
+                for i, e in enumerate(newedges):
+                    if e[2] == newend:
+                        newedges[i] = (e[0], e[1], None)
+            new += newedges
+            newstart = newend
+        if c not in '|().':
+            edge += c
+    if edgechar: edgechar.pop(0)
+    new.append((newstart, edge, end))
+    return new
+def epsilon_closure(edges):
+    epsilon = [e for e in edges if len(e[1]) == 0 and e[2] is not None]
+    edges = [e for e in edges if len(e[1]) > 0]
+    initial_edges = edges[:]
+    for start, _, end in epsilon:
+        for i, e in enumerate(edges):
+            if e[0] == end: edges[i] = (start, e[1], e[2])
+            if e[2] == end: edges[i] = (e[0], e[1], start)
+    if edges != initial_edges:
+        return epsilon_closure(edges + epsilon)
+    return edges
+
 WALL_UP = 1
 WALL_RIGHT = 2
 WALL_DOWN = 4
