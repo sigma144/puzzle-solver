@@ -734,7 +734,7 @@ def _parse_edges(start, edgechar, end):
                         newedges[i] = (e[0], e[1], None)
             new += newedges
             newstart = newend
-        if c not in '|().':
+        if c not in '|() ':
             edge += c
     if edgechar: edgechar.pop(0)
     new.append((newstart, edge, end))
