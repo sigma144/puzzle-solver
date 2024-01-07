@@ -3,8 +3,6 @@ A           Single path
 A|B         Parallel paths
 A(B|C)      Path split
 A(B|C)D     Split + join
-A(B|C).     Split + join at empty room
-(A|B|).     Parallel paths reachable from both ends
 
 Key/Door Colors:
 w   White
