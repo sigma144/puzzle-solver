@@ -51,7 +51,6 @@ Auras (place before door):
 !   Ice (1 red needed)
 @   Erosion (5 green needed)
 #   Paint (3 blue needed)
-~   Curse (with brown key)
 
 Other:
 > or <      One-way drop
