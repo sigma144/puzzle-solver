@@ -37,19 +37,21 @@ class Catalog:
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     #Implement __hash__ and __eq__ for states
-    def solve_optimal(self, starting_state, debug=False, prnt=True, diff=True, diff_trail=False, showprogress=False, use_score=False):
-        print("Solving...")
+    def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, use_score=0, optimize_score=0, use_names=0, **kwargs):
         start_time = time.time()
+        self.kwargs = kwargs
         starting_state = self.setup(starting_state)
         starting_state.previous = None
+        print(starting_state)
+        print("Solving...")
         prev_states = {starting_state}
-        state_queue = deque()
+        self._state_queue = deque()
         if use_score:
             starting_state._invalidate = False
             prev_states = {starting_state: (starting_state, -1, starting_state.state_score)}
-        state_queue.append(starting_state)
+        self._state_queue.append(starting_state)
         count_iterate = 0
-        depth = 0
+        self._depth = 0
         depth_target = 1
         depth_time = time.time()
         depth_last = 0
@@ -57,16 +59,16 @@ class Solver:
         best_score = None
         def finish_solve(state):
             elapsed = time.time() - start_time
-            move_list = self.trace_moves(state, prnt, diff, diff_trail)
+            move_list = self.trace_moves(state, prnt, diff, diff_trail, use_names)
             print("Solved in", len(move_list)-1, "moves!")
             if self.score_state(state) is not None:
                 print("Score:", str(self.score_state(state)))
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             return move_list
-        while len(state_queue) > 0:
+        while len(self._state_queue) > 0:
             count_iterate += 1
-            state = state_queue.popleft()
-            if debug: print(state, ": Current")
+            state = self._state_queue.popleft()
+            if debug: print(state, "\n^ Current" + (': ' + state.name if use_names else '') + "\n")
             if use_score and state._invalidate:
                 next = []
             else:
@@ -74,13 +76,13 @@ class Solver:
             hint = 0
             if debug:
                 for i, s in enumerate(next):
-                    print(s, ": "+str(i+1))
+                    print(s, "\n^ "+str(i+1)+ (': ' + s.name if use_names else '') + "\n")
                 hint = input() or 0
                 if hint: next = [next[min(int(hint) - 1, len(next) - 1)]]
             for s in next:
                 s.previous = state
                 if self.check_finish(s):
-                    if not use_score: return finish_solve(s)
+                    if not use_score or optimize_score: return finish_solve(s)
                     score = self.score_state(s)
                     if best_score is None or score > best_score:
                         best_state = s
@@ -91,27 +93,27 @@ class Solver:
                     s._invalidate = False
                     if s in prev_states and not hint:
                         s2, depth2, score2 = prev_states[s]
-                        if depth == depth2 and self.score_state(s) > score2:
+                        if self._depth == depth2 and self.score_state(s) > score2:
                             s2._invalidate = True
                         else: continue
-                    prev_states[s] = (s, depth, self.score_state(s))
-                    state_queue.append(s)
+                    prev_states[s] = (s, self._depth, self.score_state(s))
+                    self._state_queue.append(s)
                 elif len(prev_states) != (prev_states.add(s) or len(prev_states)) or hint:
-                    state_queue.append(s)
+                    self._state_queue.append(s)
             if count_iterate == depth_target:
                 if use_score and best_state is not None:
                     return finish_solve(best_state)
-                depth += 1
+                self._depth += 1
                 elapsed = time.time() - depth_time
                 time_diff = elapsed - depth_last
                 depth_last = elapsed
                 depth_time = time.time()
-                print("Depth "+str(depth)+'...'+"{:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-                depth_target = count_iterate + len(state_queue)
+                print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                depth_target = count_iterate + len(self._state_queue)
             if count_iterate % 20000 == 0:
                 if showprogress:
                     print(state)
-                    print("Depth "+str(depth)+",", str(count_iterate // 1000) + "k states checked")
+                    print("Depth "+str(self._depth)+",", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time))
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
                     print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
@@ -120,7 +122,7 @@ class Solver:
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
     @staticmethod
-    def trace_moves(s, prnt=False, diff=True, diff_trail=False):
+    def trace_moves(s, prnt=0, diff=1, diff_trail=0, use_names=0):
         move_list = [s]
         while s.previous is not None:
             move_list.insert(0, s.previous)
@@ -139,6 +141,8 @@ class Solver:
                     if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
                     if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
                     print(newstr)
+            elif use_names and move_list:
+                print(', '.join([m.name for m in move_list[1:]]))
             else:
                 for m in move_list: print(m)
         return move_list
@@ -175,8 +179,8 @@ class Solver:
 
     #Recursive/optimal solving functions
 
-    def setup(self, state):
-        return state
+    def setup(self, puzzle):
+        return puzzle
 
     def get_next_states(self, state):
         return []
