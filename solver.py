@@ -46,33 +46,42 @@ class Solver:
         print("Solving...")
         prev_states = {starting_state}
         self._state_queue = deque()
-        if use_score:
-            starting_state._invalidate = False
-            prev_states = {starting_state: (starting_state, -1, starting_state.state_score)}
         self._state_queue.append(starting_state)
-        count_iterate = 0
+        self._next_queue = deque()
         self._depth = 0
-        depth_target = 1
+        self._score = 0
+        self._moves = 0
+        best_score = None
+        best_state = None
+        count_iterate = 0
         depth_time = time.time()
         depth_last = 0
-        best_state = None
-        best_score = None
+        if use_score or optimize_score:
+            use_score = True
+            starting_state._invalidate = False
+            score = (0, self.score_state(starting_state))
+            if optimize_score: score = (score[1], score[0])
+            prev_states = {starting_state: (starting_state, score)}
+            self._next_queue = {score: self._state_queue}
+            self._score = score
         def finish_solve(state):
             elapsed = time.time() - start_time
             move_list = self.trace_moves(state, prnt, diff, diff_trail, use_names)
-            print("Solved in", len(move_list)-1, "moves!")
-            if self.score_state(state) is not None:
-                print("Score:", str(self.score_state(state)))
+            if optimize_score:
+                print("Solved with score", str(self.score_state(state))+"!")
+                print("Moves:", len(move_list)-1)
+            else:
+                print("Solved in", len(move_list)-1, "moves!")
+                if self.score_state(state) is not None:
+                    print("Score:", str(self.score_state(state)))
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             return move_list
-        while len(self._state_queue) > 0:
+        while True:
             count_iterate += 1
             state = self._state_queue.popleft()
             if debug: print(state, "\n^ Current" + (': ' + state.name if use_names else '') + "\n")
-            if use_score and state._invalidate:
-                next = []
-            else:
-                next = self.get_next_states(state)
+            if use_score and state._invalidate: next = []
+            else: next = self.get_next_states(state)
             hint = 0
             if debug:
                 for i, s in enumerate(next):
@@ -81,35 +90,27 @@ class Solver:
                 if hint: next = [next[min(int(hint) - 1, len(next) - 1)]]
             for s in next:
                 s.previous = state
-                if self.check_finish(s):
-                    if not use_score or optimize_score: return finish_solve(s)
-                    score = self.score_state(s)
-                    if best_score is None or score > best_score:
-                        best_state = s
-                        best_score = score
-            for s in next:
                 if not self.check_state(s): continue
                 if use_score:
                     s._invalidate = False
+                    score = (self._moves + 1, self.score_state(s))
+                    if optimize_score: score = (score[1], score[0])
                     if s in prev_states and not hint:
-                        s2, depth2, score2 = prev_states[s]
-                        if self._depth == depth2 and self.score_state(s) > score2:
+                        s2, score2 = prev_states[s]
+                        if score < score2:
                             s2._invalidate = True
                         else: continue
-                    prev_states[s] = (s, self._depth, self.score_state(s))
-                    self._state_queue.append(s)
-                elif len(prev_states) != (prev_states.add(s) or len(prev_states)) or hint:
-                    self._state_queue.append(s)
-            if count_iterate == depth_target:
-                if use_score and best_state is not None:
-                    return finish_solve(best_state)
-                self._depth += 1
-                elapsed = time.time() - depth_time
-                time_diff = elapsed - depth_last
-                depth_last = elapsed
-                depth_time = time.time()
-                print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-                depth_target = count_iterate + len(self._state_queue)
+                    if self.check_finish(s):
+                        if best_score is None or score < best_score:
+                            best_score = score
+                            best_state = s
+                    prev_states[s] = (s, score)
+                    if score not in self._next_queue: self._next_queue[score] = deque()
+                    self._next_queue[score].append(s)
+                else:
+                    if self.check_finish(s): return finish_solve(s)
+                    if len(prev_states) != (prev_states.add(s) or len(prev_states)) or hint:
+                        self._next_queue.append(s)
             if count_iterate % 20000 == 0:
                 if showprogress:
                     print(state)
@@ -117,7 +118,31 @@ class Solver:
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
                     print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+            if len(self._state_queue) == 0:
+                if use_score:
+                    self._next_queue.pop(self._score)
+                    if len(self._next_queue) == 0: break
+                    score = min(self._next_queue)
+                    if score == best_score: return finish_solve(best_state)
+                    self._state_queue = self._next_queue[score]
+                    self._score = score
+                    if optimize_score: self._moves = score[1]
+                    else: self._moves = score[0]
+                    if score[0] == self._depth: continue
+                    self._depth = score[0]
+                else:
+                    if len(self._next_queue) == 0: break
+                    self._state_queue = self._next_queue
+                    self._next_queue = deque()
+                    self._depth += 1
+                elapsed = time.time() - depth_time
+                time_diff = elapsed - depth_last
+                depth_last = elapsed
+                depth_time = time.time()
+                print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
         print("No solution exists.")
+        if best_state is not None:
+            print("Best state", best_state)
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
