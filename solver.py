@@ -1,7 +1,6 @@
 from math import sqrt
 import time
 from collections import deque
-import heapq
 import psutil
 from dataclasses import dataclass
 import pickle, bisect
@@ -104,7 +103,9 @@ class Solver:
                         if best_score is None or score < best_score:
                             best_score = score
                             best_state = s
+                            self._next_queue = {k:v for k,v in self._next_queue.items() if k < best_score}
                     prev_states[s] = (s, score)
+                    if best_score is not None and score >= best_score: continue
                     if score not in self._next_queue: self._next_queue[score] = deque()
                     self._next_queue[score].append(s)
                 else:
@@ -114,16 +115,17 @@ class Solver:
             if count_iterate % 20000 == 0:
                 if showprogress:
                     print(state)
-                    print("Depth "+str(self._depth)+",", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time))
+                    print("Depth "+str(self._depth)+",", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
                     print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
             if len(self._state_queue) == 0:
                 if use_score:
                     self._next_queue.pop(self._score)
-                    if len(self._next_queue) == 0: break
+                    if len(self._next_queue) == 0:
+                        if best_state is not None: return finish_solve(best_state)
+                        break
                     score = min(self._next_queue)
-                    if score == best_score: return finish_solve(best_state)
                     self._state_queue = self._next_queue[score]
                     self._score = score
                     if optimize_score: self._moves = score[1]
