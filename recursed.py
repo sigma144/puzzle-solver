@@ -6,11 +6,10 @@ objects = 'kbfxXypo$*_wWmMgP0123456789ABCDXYZ'
 class Room:
     def __init__(self):
         self.id = -1
-        self.player_pos = 0
+        self.player_pos = None
         self.global_exit_from = None
         self.nodes = []
         self.edges = []
-        self.jar_num = 0
     def copy(self):
         room = Room()
         room.id = self.id
@@ -63,34 +62,37 @@ class RecursedState:
         self.globals = []
         self.name = 'Start'
         self.starting_rooms = None
-    def copy(self):
+        self.moves = 0
+    def copy(self, copy_room=False):
         state = RecursedState()
         state.context = self.context
         state.item = self.item
         state.state = {k: v for k, v in self.state.items()}
         state.stack = self.stack[:]
         state.state[state.context] = state.stack
-        state.room = self.room.copy()
-        state.state[state.context][-1] = state.room
         state.node = self.node
+        if copy_room: state.room = self.room.copy()
         state.jars = self.jars
         state.globals = self.globals
         state.starting_rooms = self.starting_rooms
+        state.moves = self.moves
         return state
     def current_node(self):
         return self.room.nodes[self.node]
     def current_item(self):
         if isinstance(self.item, int):
-            item = self.globals[self.item][2]
-            if isinstance(item, Room):  return 'g jar '+str(item.jar_num)
-            return item
-        if isinstance(self.item, Room): return 'jar '+str(self.item.jar_num)
+            return 'g'+self.globals[self.item][2]
         return self.item
+    def load_current_room(self):
+        self.room = Catalog.get(self.stack[-1]).copy()
+    def save_current_room(self):
+        self.stack[-1] = Catalog.sadd(self.room)
+        self.room = None
     def drop_item(self, dest=None):
         if dest is None: dest = self.node
         if isinstance(self.item, int):
             if 'M' in self.room.nodes[dest]:
-                self.item = self.globals[self.item][2].replace('g', '')
+                self.item = self.globals[self.item][2]
             else: return self.drop_global_item(dest)
         self.room.nodes = self.room.nodes[:]
         self.room.nodes[dest] = self.room.nodes[dest][:]
@@ -117,12 +119,12 @@ class RecursedState:
         self.item = i
         self.globals = self.globals[:]
         self.globals[i] = (None, None, self.globals[i][2])
-        self.transform_oobleck()
-    def transform_oobleck(self, copy_room = False):
+        self.transform_oobleck(True)
+    def transform_oobleck(self, save_room = False):
         copy = self.globals[self.item][2] if isinstance(self.item, int) else self.item
-        if copy == 'y': return
-        if isinstance(self.item, int) and not isinstance(copy, Room): copy = copy.replace('g', '')
-        if copy == 'o': return
+        if copy == 'y' or copy == 'o':
+            if save_room: self.room = None
+            return
         transformed = False
         new_nodes = self.room.nodes[:]
         for ni, node in enumerate(new_nodes):
@@ -130,17 +132,17 @@ class RecursedState:
                 if item == 'o':
                     new_nodes[ni] = new_nodes[ni][:]
                     new_nodes[ni][ii] = copy
+                    new_nodes[ni].sort()
                     transformed = True
-        if transformed:
-            if copy_room:
-                self.stack[-1] = self.room.copy()
-            self.room = self.stack[-1]
-            self.room.nodes = new_nodes
-            self.room.oobleck = False
         for i, (r, n, c) in enumerate(self.globals):
-            if r == self.room.id and c == 'go':
+            if r == self.room.id and c == 'o':
                 self.globals = self.globals[:]
-                self.globals[i] = (r, n, 'g'+copy if isinstance(copy, str) else copy)
+                self.globals[i] = (r, n, copy)
+        if transformed:
+            self.room.nodes = new_nodes
+            if save_room:
+                self.save_current_room()
+        elif save_room: self.room = None
     def unlock_door(self, x, back):
         for i, (r, n, c) in enumerate(self.globals):
             if r == self.room.id and n == x and len(self.room.edges[x][1]) == c:
@@ -160,31 +162,37 @@ class RecursedState:
                 self.item = None
                 return
     def push_room(self, room, global_exit_from):
-        self.room.player_pos = self.node
+        if global_exit_from is None or RECORD_GLOBAL_ENTRY_POSITIONS:
+            self.room.player_pos = self.node
         self.room.global_exit_from = global_exit_from
-        self.room = room.copy()
-        self.stack.append(self.room)
+        if self.stack: self.save_current_room()
+        self.stack.append(room)
+        self.load_current_room()
         self.node = self.room.player_pos
+        changed = False
         for i, (r, n, c) in enumerate(self.globals):
             if r == self.room.id and 'M' in self.room.nodes[n]:
+                changed = True
                 self.room.nodes = self.room.nodes[:]
                 self.room.nodes[n] = self.room.nodes[n][:]
-                self.room.nodes[n].append(c.replace('g', ''))
+                self.room.nodes[n].append(c)
                 self.globals = self.globals[:]
                 self.globals[i] = (None, None, c)
-        if self.item is not None: self.transform_oobleck()
+        if self.item is not None: self.transform_oobleck(True)
+        elif changed: self.save_current_room()
+        else: self.room = None
+        self.moves += 1
     def pop_room(self):
-        prev_room = self.stack.pop(-1)
-        room = self.stack[-1]
-        if room.global_exit_from is None or room.global_exit_from == self.item:
-            self.node = room.player_pos
+        self.stack.pop(-1)
+        self.load_current_room()
+        if self.room.global_exit_from is None or self.room.global_exit_from == self.item:
+            self.node = self.room.player_pos
         else:
-            r, n, item = self.globals[room.global_exit_from]
-            if r != self.stack[-1].id or 'X' in room.nodes[n]:
+            r, n, item = self.globals[self.room.global_exit_from]
+            if r != self.room.id or 'X' in self.room.nodes[n]:
                 self.to_paradox()
             else: self.node = n
-        self.room = self.stack[-1]
-        return prev_room
+        self.moves += 1
     def to_paradox(self, context='P'):
         if len(self.state) == 1: self.state['A'] = []
         self.state[context] = []
@@ -193,9 +201,11 @@ class RecursedState:
         if context in self.starting_rooms:
             self.push_room(self.starting_rooms[context], None)
         else: self.push_room(self.starting_rooms['A'], None)
+        self.load_current_room()
         self.name = 'Exit (Paradox)'
         if self.context == 'X':
             self.name = 'Exit (Invalid)'
+        self.moves -= 1
     def can_move_to(self, edge_i):
         start, edge, end = self.room.edges[edge_i]
         height = -1
@@ -203,9 +213,9 @@ class RecursedState:
         if 'f' in self.current_node(): height = -100
         boxes = self.current_node().count('b')
         for r, n, c in self.globals:
-            if r == self.room.id and n == self.node and c == 'gb':
+            if r == self.room.id and n == self.node and c == 'b':
                 boxes += 1
-            if r == self.room.id and n == self.node and c == 'gf':
+            if r == self.room.id and n == self.node and c == 'f':
                 height = -100
             if r == self.room.id and n == edge_i and start == self.node and c == len(edge):
                 return 'l'
@@ -215,7 +225,7 @@ class RecursedState:
             if edge and edge[0] == '=':
                 if 'f' in self.room.nodes[end]: return False
                 for (r, n, c) in self.globals:
-                    if r == self.room.id and n == end and c == 'gf':
+                    if r == self.room.id and n == end and c == 'f':
                         return False
             for c in edge:
                 if c == 'l': result = 'l'
@@ -227,7 +237,7 @@ class RecursedState:
             if edge and edge[-1] == '=':
                 if 'f' in self.room.nodes[start]: return False
                 for (r, n, c) in self.globals:
-                    if r == self.room.id and n == start and c == 'gf':
+                    if r == self.room.id and n == start and c == 'f':
                         return False
             for c in edge[::-1]:
                 if c == 'l': result = 'l'
@@ -240,7 +250,8 @@ class RecursedState:
         for ct, c in self.state.items():
             s += '-------<'+ct+'>-------\n'
             for r in c:
-                s += str(r) + '\n'
+                #s += str(r) + '\n'
+                s += str(Catalog.get(r)) + '\n'
         return s
     def __repr__(self):
         return repr((self.context, self.node, self.item, self.globals, self.state))
@@ -269,7 +280,8 @@ class RecursedSolver(Solver):
             for j, n in enumerate(r.nodes):
                 for c in n:
                     if c[0] == 'g':
-                        state.globals.append((i, j, c))
+                        state.globals.append((i, j, c[1:]))
+                if 'x' in n: n.remove('x')
                 r.nodes[j] = sorted([c for c in n if c[0] != 'g'])
             for j, e in enumerate(r.edges):
                 for k, c in enumerate(e[1]):
@@ -285,17 +297,34 @@ class RecursedSolver(Solver):
                     if 'p' in n:
                         self.steal_item = True
                         n.remove('p')
+        self.rooms = [Catalog.sadd(r) for r in self.rooms]
+        state.starting_rooms = {k: Catalog.sadd(r) for k, r in state.starting_rooms.items()}
         state.state = {'A': []}
         state.stack = state.state['A']
-        state.room = rooms[0].copy()
+        state.room = state.starting_rooms['A']
         state.stack.append(state.room)
+        state.load_current_room()
         state.node = state.room.player_pos
+        state.room = None
         self.entered_paradox = 0
         return state
     def get_next_states(self, state):
+        assert state.room is None
         states = []
+        state.load_current_room()
         node = state.current_node()
         if state.item is None:
+            if state.node == Catalog.get(self.rooms[state.room.id]).player_pos and len(state.stack) > 1:
+                #Exit
+                new_state = state.copy()
+                new_state.name = 'Exit'
+                new_state.pop_room()
+                new_state.room = None
+                if new_state.name == 'Exit (Paradox)':
+                    if not self.steal_item or self.entered_paradox and self._depth > self.entered_paradox + 1:
+                        new_state.globals = [(gr, gn, gi) for gr, gn, gi in new_state.globals if gr is not None and gr >= Catalog.get(new_state.stack[-1]).id]
+                        states.append(new_state)
+                else: states.append(new_state)
             for i, item in enumerate(node):
                 if item == self.kwargs.get('goal', '$'):
                     #Win the level
@@ -303,167 +332,153 @@ class RecursedSolver(Solver):
                     new_state.item = item
                     new_state.name = 'Win'
                     return [new_state]
-                elif item == 'x':
-                    if len(state.stack) > 1:
-                        #Exit
-                        new_state = state.copy()
-                        new_state.name = 'Exit'
-                        new_state.pop_room()
-                        if new_state.name == 'Exit (Paradox)':
-                            if not self.steal_item or self.entered_paradox and self._depth > self.entered_paradox + 1:
-                                new_state.globals = [(gr, gn, gi) for gr, gn, gi in new_state.globals if gr is not None and gr >= new_state.room.id]
-                                states.append(new_state)
-                        else: states.append(new_state)
                 elif item == 'y':
                     if len(state.stack) > 1 and state.item == None and state.jars < JAR_LIMIT:
                         #Jar Exit
-                        new_state = state.copy()
-                        new_state.name = 'Yield ' + str(state.jars + 1)
+                        new_state = state.copy(copy_room=True)
                         new_state.grab_item(i, False)
-                        jar = new_state.pop_room()
+                        jar = new_state.room
                         jar.player_pos = state.node
-                        new_state.item = jar
                         new_state.jars += 1
-                        jar.jar_num = new_state.jars
+                        new_state.item = 'j'+str(Catalog.sadd(jar))
+                        new_state.pop_room()
                         new_state.transform_oobleck(True)
+                        new_state.room = None
                         if new_state.name == 'Exit (Paradox)':
-                            new_state.name = 'Yield ' + str(state.jars + 1) + ' (Paradox)'
+                            new_state.name = 'Yield ' + new_state.item + ' (Paradox)'
                             if self.steal_item or self.entered_paradox and self._depth > self.entered_paradox + 1:
                                 states.append(new_state)
-                        else: states.append(new_state)
-                elif isinstance(item, Room):
-                    #Pick up jar
-                    new_state = state.copy()
-                    new_state.grab_item(i)
-                    new_state.name = 'Grab jar '+str(new_state.item.jar_num)
-                    states.append(new_state)
+                        else:
+                            new_state.name = 'Yield ' + new_state.item
+                            states.append(new_state)
                 elif item not in '_wWmMLX':
                     #Pick up item
-                    new_state = state.copy()
+                    new_state = state.copy(copy_room=True)
                     new_state.grab_item(i)
+                    new_state.save_current_room()
                     new_state.name = 'Grab '+new_state.item
                     states.append(new_state)
             for i, (r, n, c) in enumerate(state.globals):
                 if r == state.room.id and n == state.node and not isinstance(c, int):
                     #Pick up global item
-                    new_state = state.copy()
+                    new_state = state.copy(copy_room=True)
                     new_state.grab_global_item(i)
+                    new_state.room = None
                     new_state.name = 'Grab '+new_state.current_item()
                     states.append(new_state)
         else:
-            if len(node) < ITEM_LIMIT:
-                #Drop held item
-                new_state = state.copy()
-                new_state.name = 'Drop '+new_state.current_item()
-                new_state.drop_item()
-                states.append(new_state)
-            if 'x' in node:
-                if len(state.stack) > 1:
-                    #Exit with item
-                    new_state = state.copy()
-                    new_state.name = 'Exit'
-                    new_state.pop_room()
+            if state.node == Catalog.get(self.rooms[state.room.id]).player_pos and len(state.stack) > 1:
+                #Exit with item
+                new_state = state.copy(copy_room=True)
+                new_state.name = 'Exit'
+                new_state.pop_room()
+                if new_state.node is not None:
                     new_state.transform_oobleck(True)
                     if new_state.name == 'Exit (Paradox)':
                         if self.steal_item or self.entered_paradox and self._depth > self.entered_paradox + 1:
                             states.append(new_state)
                     else: states.append(new_state)
+            if len(node) < ITEM_LIMIT:
+                #Drop held item
+                new_state = state.copy(copy_room=True)
+                new_state.name = 'Drop '+new_state.current_item()
+                new_state.drop_item()
+                new_state.save_current_room()
+                states.append(new_state)
         for i, edge in enumerate(state.room.edges):
             result = state.can_move_to(i)
             if result is True:
                 #Move
-                new_state = state.copy()
+                new_state = state.copy(copy_room=True)
                 dest = edge[0]
                 if state.node == edge[0]: dest = edge[2]
                 new_state.name = 'Move '+str(new_state.node) + '->' + str(dest)
                 new_state.node = dest
                 if isinstance(new_state.item, int) and 'M' in new_state.room.nodes[dest]:
-                    new_state.item = new_state.globals[new_state.item][2].replace('g', '')
+                    new_state.item = new_state.globals[new_state.item][2]
+                new_state.room = None
                 states.append(new_state)
                 #Drop item off ledge
                 if state.item != None and '=' not in edge[1]:
-                    new_state = state.copy()
+                    new_state = state.copy(copy_room=True)
                     dest = edge[0]
                     if state.node == edge[0]: dest = edge[2]
                     if len(state.room.nodes[dest]) < ITEM_LIMIT:
                         new_state.name = 'Throw '+state.current_item() + '->' + str(dest)
                         new_state.drop_item(dest)
+                        new_state.save_current_room()
                         states.append(new_state)
             elif result == 'l':
-                if state.current_item() in ['k', 'gk']:
+                if state.current_item() == 'k' or state.current_item() == 'gk':
                     #Unlock door
-                    new_state = state.copy()
+                    new_state = state.copy(copy_room=True)
                     new_state.unlock_door(i, back = state.node == edge[2])
+                    new_state.save_current_room()
                     new_state.name = 'Unlock door'
                     states.append(new_state)
             elif result == 't':
                 if state.item != None:
                     #Throw item
-                    new_state = state.copy()
+                    new_state = state.copy(copy_room=True)
                     dest = edge[0]
                     if state.node == edge[0]: dest = edge[2]
                     if len(state.room.nodes[dest]) < ITEM_LIMIT:
                         new_state.drop_item(dest)
+                        new_state.save_current_room()
                         new_state.name = 'Throw '+state.current_item() + '->' + str(dest)
                         states.append(new_state)
         if len(state.stack) < STACK_LIMIT:
             for i, item in enumerate(node):
-                if isinstance(item, Room):
-                    #Enter jar
-                    new_state = state.copy()
-                    new_state.grab_item(i, False)
-                    jar = new_state.item
-                    new_state.item = state.item
-                    #if jar.jar_num == -1:
-                    #    new_state.push_room(self.glitch, None)
-                    #else:
-                    new_state.push_room(jar, None)
-                    new_state.name = 'Enter jar '+str(jar.jar_num)
-                    #new_state.room.jar_num = -1
-                    states.append(new_state)
-                elif item.isdigit():
+                if item.isdigit():
                     #Enter chest
                     if 'W' not in node and 'M' not in node:
                         #Dry
-                        new_state = state.copy()
+                        new_state = state.copy(copy_room=True)
                         new_state.push_room(self.rooms[int(item)], None)
                         new_state.name = 'Enter '+item
+                        assert new_state.room is None
                         states.append(new_state)
                     if 'w' in node or 'W' in node or 'm' in node or 'M' in node:
                         #Wet
-                        new_state = state.copy()
+                        new_state = state.copy(copy_room=True)
                         new_state.push_room(self.rooms[int(item)+len(self.rooms)//2], None)
                         new_state.name = 'Enter '+item+' wet'
                         states.append(new_state)
+                elif item[0] == 'j':
+                    #Enter jar
+                    new_state = state.copy(copy_room=True)
+                    new_state.grab_item(i, False)
+                    jar = int(new_state.item[1:])
+                    new_state.item = state.item
+                    new_state.push_room(jar, None)
+                    new_state.name = 'Enter '+item
+                    states.append(new_state)
             for i, (r, n, item) in enumerate(state.globals):
                 if r == state.room.id and n == state.node:
-                    if isinstance(item, str) and item[-1].isdigit():
+                    if item.isdigit():
                         #Enter global chest
                         if 'W' not in node and 'M' not in node:
                             #Dry
-                            new_state = state.copy()
-                            new_state.push_room(self.rooms[int(item[-1])], i)
-                            new_state.name = 'Enter g'+item[-1]
+                            new_state = state.copy(copy_room=True)
+                            new_state.push_room(self.rooms[int(item)], i)
+                            new_state.name = 'Enter g'+item
                             states.append(new_state)
                         if 'w' in node or 'W' in node or 'm' in node or 'M' in node:
                             #Wet
-                            new_state = state.copy()
-                            new_state.push_room(self.rooms[int(item[-1])+len(self.rooms)//2], i)
-                            new_state.name = 'Enter g'+item[-1]+' wet'
+                            new_state = state.copy(copy_room=True)
+                            new_state.push_room(self.rooms[int(item)+len(self.rooms)//2], i)
+                            new_state.name = 'Enter g'+item+' wet'
                             states.append(new_state)
-                    elif isinstance(item, Room):
+                    elif item[0] == 'j':
                         #Enter global jar
-                        new_state = state.copy()
-                        jar = state.globals[i][2]
+                        new_state = state.copy(copy_room=True)
+                        jar = int(item[1:])
                         new_state.globals = state.globals[:]
                         new_state.globals.pop(i)
-                        #if jar.jar_num == -1:
-                        #    new_state.push_room(self.glitch, None)
-                        #else:
                         new_state.push_room(jar, None)
-                        new_state.name = 'Enter g jar '+str(jar.jar_num)
-                        #new_state.room.jar_num = -1
+                        new_state.name = 'Enter g'+item
                         states.append(new_state)
+        state.room = None
         return states
     def check_state(self, state):
         if self.kwargs.get('goal', '$') == '$' and state.context == 'P':
@@ -481,6 +496,8 @@ class RecursedSolver(Solver):
         return True
     def check_finish(self, state):
         return state.item == self.kwargs.get('goal', '$')
+    def score_state(self, state):
+        return state.moves
 
 pJourney = ['x123', (['x', 'b'], [(0, 'l', 1), (0, '>>', 1)]), 'xk', 'x(<<$)'] #9 moves
 pReset = ['xb(<<1|<<<<$)', 'xb'] #12 moves
@@ -535,7 +552,7 @@ pPillar = ['x12', (['xM', '', 'gbgk'], [(0, '', 1), (1, '<>>>', 2), (0, '<<<', 2
            '', '', 'xM(<<<3)', (['xM', 'X', '$'], []),] #39 moves
 pMire = ['x12', (['xb3', '', 'gk'], [(0, '>>>', 1), (1, '', 2)]), (['x', '', '', '$'], [(0, '<<', 1)]), 'xw',
          '', (['xb3W', 'W', 'W'], [(0, '', 1)]), (['x', '', '', '$'], [(0, '<', 2), (1, '', 2), (2, 'l', 3)]), 'xW'] #50 moves (takes a long time)
-pInterlock = ['x1', 'xg23g4', (['x', 'gk'], [(0, '<<>>', 1), (0, 't', 1)]), 'x', (['x', '', '$'], [(0, 't', 1), (1, 'l', 2)]), 'px*'] #53/17 moves
+pInterlock = ['x1', 'xg23g4', (['x', 'gk'], [(0, '<<>>', 1), (0, 't', 1)]), 'x', (['x', '', '$'], [(0, 't', 1), (1, 'l', 2)]), 'px*'] #53/17 moves (takes a very long time)
 ##########################################################################
 pFissure = ['xbb1', (['x', 'y', '$'], [(0, '<<>>>>', 1), (1, '<<', 2)])] #11 moves
 pResume = ['x1', (['k', 'x', 'y', '$'], [(0, '<', 1), (1, '<', 2), (2, 'l', 3)])] #11 moves
@@ -545,7 +562,7 @@ pRestructure = ['xk12', 'x(<y|<<<$)', 'x(lbby)'] #21 moves
 pBuild = ['x1(l$)', 'xb(<<<y|<<<<<k)'] #27 moves
 pInternal = ['xbk1', (['xy', '', 'W'], [(0, '<', 1), (1, 'L', 2)]), '', 'xW$'] #23 moves
 pEntwine = ['x12', (['x', 'y', '', '$'], [(0, '<', 1), (1, 't', 2), (0, '<<', 2), (2, 'l', 3)]),
-            (['x', 'k', 'b', 'y'], [(0, '>>', 1), (0, '>>', 2), (1, '>>>', 3), (2, '>>>', 3)])] #25 moves (takes a long time)
+            (['x', 'k', 'b', 'y'], [(0, '>>', 1), (0, '>>', 2), (1, '>>>', 3), (2, '>>>', 3)])] #25 moves (takes a while)
 pClasp = ['xkkg1', (['xy', 'b', '', '$'], [(0, 'll', 1), (0, '<', 2), (2, '<t', 3)]), 'xp'] #31/? moves (takes a while)
 pTraversal = ['x1', 'xy(>b|<<<$)'] #19 moves
 pHydrophobic = ['x1(>>W)', 'xy(lb|<<<<$)', '', 'xWyk(lW|<<<$)'] #35 moves (takes a long time)
@@ -581,12 +598,14 @@ pJaunt = ['x123', (['x', 'y', '$'], [(0, '<<>>>', 1), (1, 'l', 2)]), 'xwgo', (['
 pTransfer = [(['1', 'k', 'x', 'o', '2'], [(0, '<', 1), (1, '<', 2), (2, '>', 3), (3, '>', 4)]), 'xy(<l$)', 'x(<>by)'] #50 moves
 pDump = [(['xg1', 'gk', '_', '2'], [(0, '<<', 1), (0, '>', 2), (2, '<', 3)]), (['x_', 'y', 'b'], [(0, '<>', 1), (1, 't', 2), (1, 't>>', 0), (2, '>>>', 0)]), (['xo', '', '$'], [(0, '>>>>', 1), (1, 'lll', 2)])]
 
-ITEM_LIMIT = 5
+ITEM_LIMIT = 4
 STACK_LIMIT = 5
-JAR_LIMIT = 2
+JAR_LIMIT = 3
 STEAL_ITEM_THRESHOLD = 3
+RECORD_GLOBAL_ENTRY_POSITIONS = 1
+
 if __name__ == '__main__':
-    puzzle = pDump
+    puzzle = pResume
     rooms = []
     for edges in puzzle:
         room = Room()
@@ -598,4 +617,4 @@ if __name__ == '__main__':
         rooms.append(room)
     print(rooms)
     solver = RecursedSolver()
-    solver.solve_optimal(rooms, debug=0, diff=0, use_names=1, showprogress=1, goal='$')
+    solver.solve_optimal(rooms, debug=0, diff=0, use_names=1, showprogress=1, goal='$', optimize_score=1)
