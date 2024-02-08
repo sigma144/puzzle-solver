@@ -23,7 +23,7 @@ class Catalog:
     @staticmethod
     def sadd(val):
         global _catalog, _used
-        sval = str(val)
+        sval = repr(val)
         if sval in _used:
             return _used[sval]
         _catalog.append(val)
