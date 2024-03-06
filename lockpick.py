@@ -15,16 +15,19 @@ class LockpickState:
         self.terminate = False
         self.solver = None
         self.iview = False
+        self.iviewmoves = []
+        self.salvage = {}
     def __eq__(self, state):
-        if self.stock != state.stock:
+        if self.stock != state.stock or self.salvage != state.salvage:
             return False
         return self.edges == state.edges
     def __hash__(self):
-        return hash(pickle.dumps((sorted([(k, v) for k, v in self.stock.items()]), self.edges), -1))
+        return hash(pickle.dumps((sorted([(k, v) for k, v in self.stock.items()]), self.edges, sorted([(k, v) for k, v in self.salvage.items()])), -1))
     def __repr__(self) -> str:
         s = 'Access:' + str(self.access) + '\n'
         s += 'Stock:' + str(self.stock) + '\n'
         s += 'Master:' + str(self.master) + '\n'
+        s += 'I-View:' + str(self.iviewmoves) + '\n'
         if self.previous:
             s += 'Last move:' + str(self.last_move) + ' ' + str(self.last_access) + '\n'
         for e in self.edges:
@@ -36,8 +39,10 @@ class LockpickState:
         s.last_move = i
         s.last_access = back
         s.master = self.master
+        s.iviewmoves = self.iviewmoves
         s.previous = self.previous
         s.solver = self.solver
+        s.salvage = self.salvage
         return s
     def can_open(self, color, num):
         stock = self.stock
@@ -109,8 +114,7 @@ class LockpickState:
                     self.edges[i][1][i2] = Catalog.sadd((l[0][:-1]+mimic, l[1], l[2]))
     def open(self, i, si, aura, sign=1):
         seq = self.edges[i][1]
-        seq[si] = Catalog.get(seq[si])
-        color = seq[si][1]; num = seq[si][2]
+        _, color, num = Catalog.get(seq[si])
         if 'X' in num:
             num, stacks = num.split('X')
             real, imag = 0, 0
@@ -123,8 +127,10 @@ class LockpickState:
                 sign = -1 if int(stacks) < 0 else 1
             if self.iview: imag -= sign
             else: real -= sign
-            if max(abs(imag), abs(real)) > self.solver.max_stacks:
-                return False
+            if max(abs(imag), abs(real)) > self.solver.max_stacks - 1:
+                if max(abs(imag), abs(real)) > self.solver.max_stacks:
+                    return False
+                self.win = 'Open copy'
             if real == 1 and imag == 0:
                 seq[si] = Catalog.sadd((aura, color, num))
                 self.terminate = True
@@ -138,6 +144,7 @@ class LockpickState:
                 return True
         elif sign == -1:
             if not self.iview and self.solver.max_stacks == 1: return False
+            if self.solver.max_stacks == 2: self.win = 'Open copy'
             seq[si] = Catalog.sadd((aura, color, num + 'X' + ('1+1i' if self.iview else '2')))
             self.terminate = True
             return True
@@ -145,6 +152,40 @@ class LockpickState:
             seq[si] = Catalog.sadd((aura, color, num + 'X1-1i'))
             self.terminate = True
             return True
+        if (isinstance(color, list) or color.isupper()) and 's' in self.stock:
+            self.terminate = True
+            self.salvage = {k:v for k,v in self.salvage.items()}
+            aura = aura.replace('!', '').replace('@', '').replace('#', '').replace('~', '')
+            if aura and aura[-1].isalpha(): aura = aura[:-1] + 'Z'
+            self.salvage[self.stock['s']] = (aura, color, num)
+            if self.solver.self_salvage is True:
+                width = aura.count('&')
+                height = aura.count('%')
+                self.prev_edges = self.edges
+                self.edges = []
+                for e in self.solver.starting_edges:
+                    locks = []
+                    for l in e[1]:
+                        if l[1] == 'S':
+                            if int(l[2]) in self.salvage:
+                                sl = Catalog.sadd(self.salvage[int(l[2])])
+                                wdiff = l[0].count('&') - width
+                                hdiff = l[0].count('%') - height
+                                if hdiff > 0 and wdiff >= 0: self.edges.append((e[0], [sl], None))
+                                elif hdiff == 0 and wdiff >= 0: locks.append(sl)
+                        else: locks.append(Catalog.sadd(l))
+                    if not locks: locks.append(Catalog.sadd(('', 's', '0')))
+                    self.edges.append((e[0], locks, e[2]))
+                self.access = {0}
+                self.stock = {}
+                self.win = "Salvage"
+                return True
+            if (color, num) != self.solver.salvage: return False
+            if self.solver.salvage_id is not None and self.stock['s'] != self.solver.salvage_id: return False
+            for e in self.edges:
+                if Catalog.sadd(('', '^', '')) in e[1]:
+                    return False
+            self.win = True
         seq.pop(si)
         if len(seq) > 0 and seq[si] == Catalog.sadd(('', '^', '')):
             seq.pop(si)
@@ -189,6 +230,7 @@ class LockpickState:
         state.iview = iview
         if self.last_move != i or self.last_access != back or self.terminate:
             state.master = []
+            state.iviewmoves = []
         next_states = []
         stock = state.stock
         seq = state.edges[i][1]
@@ -231,7 +273,7 @@ class LockpickState:
                     state.edges[i-1] = (state.edges[i-1][0], state.edges[i-1][1][:], state.edges[i-1][2])
                     state.edges[i-1][1][0] = Catalog.sadd((aura2, color1, num1))
         #Specials
-        if color == '$':
+        if color == '$' and not isinstance(self.solver.salvage, tuple):
             for e in state.edges:
                 if Catalog.sadd(('', '^', '')) in e[1]:
                     return []
@@ -265,16 +307,18 @@ class LockpickState:
             if not num: num = '1'
             elif num == 'i': num = '1i'
             elif num == '-i': num = '-1i'
-            if not iview and stacks[0] == '0':
-                iview = True
-                state.iview = True
+            #if not iview and stacks[0] == '0':
+            #    iview = True
+            #    state.iview = True
+            #    state.iviewmoves = state.iviewmoves[:] + [len(seq)-1]
             num = state.adjust_num(num, stacks, iview)
         #I-View
-        if iview:
-            if 'i' not in stacks: return next_states
-        elif stacks[-1] == 'i' or stock.get('mi', 0) != 0:
+        if not iview and (stacks[-1] == 'i' or stock.get('mi', 0) != 0):
             s = state.copy(i, back)
+            s.iviewmoves = state.iviewmoves[:] + [len(seq)-1]
             next_states += s.unlock(i, back, True)
+        if iview and 'i' not in stacks or not iview and stacks[0] == '0':
+            return next_states
         #Combo Doors
         if type(color) is list:
             spend = color[0]
@@ -295,7 +339,8 @@ class LockpickState:
             if amounti: state.spend_keys(spend.lower()+'i', amounti)
             if self.solver.mimic:
                 state.mimic_color(spend)
-                aura = aura[:-1] + spend
+                if aura and aura[0].isalpha():
+                    aura = aura[:-1] + spend
         #Regular Doors
         else:
             if not state.can_open(color, num):
@@ -305,22 +350,29 @@ class LockpickState:
             if amounti: state.spend_keys(color[0].lower()+'i', amounti)
             if self.solver.mimic:
                 state.mimic_color(color[0])
-                aura = aura[:-1] + color[0]
-        state.open(i, si, aura, None)
-        next_states.append(state)
+                if aura and aura[0].isalpha():
+                    aura = aura[:-1] + color[0]
+        if state.open(i, si, aura, None):
+            next_states.append(state)
         return next_states
 
-pattern = r'([_!#@]*)((?:[A-WYZ]/)?(?:[a-hj-wyzA-WYZ$<>^]|\[[^\[]*\]))(-?\d*i?(?:[\+-]\d*i)?X-?\d+(?:[\+-]\d*i)?|-?xi?|-?\+|=?-?\*?\d*i?(?:[\+-]\d*i)?)'
+pattern = r'([_!#@%&]*)((?:[A-WYZ]/)?(?:[a-hj-wyzA-WYZ$ω<>^]|\[[^\[]*\]))(-?\d*i?(?:[\+-]\d*i)?X-?\d+(?:[\+-]\d*i)?|-?xi?|-?\+|=?-?\*?\d*i?(?:[\+-]\d*i)?)'
 
-def parse(level, target_moves=0, max_stacks=100, special=None, passing_effect=None):
+def parse(level, target_moves=0, salvage_moves=0, salvage=None, salvage_id=None, max_stacks=100, special=None, passing_effect=None):
     edges = parse_edges(level)
     state = LockpickState({0}, {}, [])
     state.target_moves = target_moves
+    state.salvage_moves = salvage_moves
     state.mimic = None
     state.max_stacks = max_stacks
     state.special = special
     state.previous = None
     state.passing_effect = passing_effect
+    state.salvage = salvage
+    state.salvage_id = salvage_id
+    state.level = level
+    if level == 'L-1i|m-5iM0(m|<s25(C/[WRGB])|[W=W=]m[P=P=]X0-1il3U/L0$|[O=O=]m1i[R=R=]X0+1im-1[G=G=]X-1m-1i|[B=B=]X0+1im1i[K=K=]X-1m2w-1':
+        1/1
     for tup in edges:
         a, s, b = tup
         parse = parse_locks(state, s)
@@ -359,10 +411,47 @@ def parse_locks(state, s):
 def add_edge(state, start, locks, end):
     state.edges.append((start, parse_locks(state, locks), end))
 
+def test(full=False, print_moves=False):
+    solver = LockpickSolver()
+    tests = [
+        p11, p21, p31, p41, p51,      p71, p81, p91, p101, p111,             pt31,  
+        p12, p22,      p42, p52, p62, p72, p82, p92, p102,                   pt32, pt42,
+        p13, p23, p33, p43,      p63, p73, p83,      p103, p113, pt13,             pt43,
+        p14, p24, p34, p44, p54, p64, p74, p84, p94, p104, p114,       pt24, pt34,
+        p15, p25, p35, p45, p55, p65, p75, p85, p95, p105, p115, pt15, pt25, 
+        p16, p26, p36, p46, p56, p66, p76, p86, p96, p106, p116, pt16,       pt36,
+        p17, p27, p37, p47, p57, p67,                p107, p117, pt17, pt27,
+        p18, p28, p38,           p68, p78,           p108, p118, 
+        p19, p29,                p69,                            
+             p210,                    p710,                p1110,
+        p1A, p2A, p3A, p4A,      p6A,           p9A,       p1111,
+             p2B, p3B, p4B,      p6B, p7B, p8B,            p11B,
+        p1C, p2C,                p6C, p7C,
+             p2D,                               p9F]
+    extests = [p112, p53, p77, p87, p119, p110, p610,
+        p5A, p7A, p8A, p1B, p5B, p9B, p10B, p3D, p7D, p9D, p7E]
+        #Exclude 32, 3C, 48, 4C, 61, 79, 93, 9C, 109, 1010, 11A
+    if full: tests = extests + tests
+    start_time = time.time()
+    for i, puzzle in enumerate(tests):
+        if full and i == len(extests):
+            print("\033[92mAll extra tests passed!\033[00m")
+        print('Test', str(i+1)+'/'+str(len(tests)))
+        if puzzle.salvage_moves > 0: puzzle.target_moves = puzzle.salvage_moves
+        sol = solver.solve(puzzle, print_moves=print_moves, showprogress=0, salvage=1)
+        if len(sol)-1 != puzzle.target_moves:
+            print('\033[91m')
+            solver.print_moves(sol)
+            print('Solve Failed, test terminated\033[00m')
+            return
+    elapsed = time.time() - start_time
+    print("\033[92mTest Complete in {:.2f} seconds.\033[00m".format(elapsed))
+
 class LockpickSolver(Solver):
     def get_next_states(self, state):
         next_states = []
         for i, (start, seq, end) in enumerate(state.edges):
+            if state.win == 'Open copy' and i != state.last_move: continue
             access = []
             if start in state.access: access.append(False)
             if end in state.access: access.append(True)
@@ -380,6 +469,101 @@ class LockpickSolver(Solver):
                     i2 += 1
                 next_states += states
         return next_states
+    def check_finish(self, state):
+        return state.win is True
+    def print_moves(self, moves, verbose=False, pause=False):
+        if not moves: return
+        red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
+        if verbose: print(moves[0])
+        for i, m in enumerate(moves):
+            if i == 0: continue
+            pm = moves[i-1]
+            print(str(i)+': ', end='')
+            locks = pm.edges[m.last_move][1]
+            next = m.edges[m.last_move][1]
+            if m.win == 'Salvage': next = m.prev_edges[m.last_move][1][1:]
+            for i2, lock in enumerate(locks):
+                lock = Catalog.get(lock)
+                if type(lock[1]) is list:
+                    if lock[1][1] and lock[1][0] == lock[1][1][0][1]:
+                        lock = (lock[0], '['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
+                    else:
+                        lock = (lock[0], lock[1][0] + '/['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
+                masterloc = i2 if m.last_access else len(locks) - i2 - 1
+                if '~' in lock[0]:
+                    lock = (lock[0].replace('~', ''), 'N', lock[2])
+                if lock[0] and lock[0][-1].isalpha():
+                    lock = (lock[0][:-1], lock[1], lock[2])
+                if m.last_access and i2 >= len(next) or \
+                 not m.last_access and i2 < len(locks) - len(next):
+                    if masterloc in m.iviewmoves:
+                        print(blue + "I-View" + black, end=' ')
+                    if masterloc in m.master:
+                        print(yellow + lock[0] + lock[1] + lock[2], end=' ')
+                    else:
+                        print(red + lock[0] + lock[1] + lock[2], end=' ')
+                else:
+                    next_lock = next[i2] if m.last_access else next[i2 + len(next) - len(locks)]
+                    next_lock = Catalog.get(next_lock)
+                    if '~' in next_lock[0]:
+                        next_lock = (next_lock[0].replace('~', ''), 'N', next_lock[2])
+                    if next_lock[0] and next_lock[0][-1].isalpha():
+                        next_lock = (next_lock[0][:-1], next_lock[1], next_lock[2])
+                    aura = next_lock[0]
+                    for c in lock[0]:
+                        color = black if c in aura else red
+                        print(color + c, end='')
+                    if masterloc in m.iviewmoves:
+                        print(blue + "I-View" + black, end=' ')
+                    if masterloc in m.master:
+                        print(yellow + lock[1] + lock[2], end=' ')
+                    elif lock[2] != next_lock[2]:
+                        print(red + lock[1] + lock[2] + black, end=' ')
+                    elif lock[1] != next_lock[1] and type(next_lock[1]) is not list:
+                        print(blue + next_lock[1] + lock[2] + black, end=' ')
+                    else:
+                        print(black + lock[1] + lock[2], end=' ')
+
+            if m.last_access:
+                print('<- ', end='')
+            if m.win == 'Salvage' or isinstance(self.salvage, tuple) and i == len(moves) - 1:
+                print(green + 'Salvage', end=' ')
+            print(black, end='')
+            if verbose: print(m)
+            if pause: input()
+            else: print()
+    def solve(self, state, salvage=False, debug=False, print_moves=True, verbose=False, showprogress=True, use_ids=False):
+        Catalog.init()
+        self.starting_edges = state.edges
+        state.edges = [(e[0], [Catalog.sadd(l) for l in e[1] if 'S' not in l[1]], e[2]) for e in state.edges]
+        self.self_salvage = 'S' in state.level
+        if state.salvage and salvage:
+            self.salvage = parse_locks(state, state.salvage)[0]
+            self.salvage = (self.salvage[1], self.salvage[2])
+            self.salvage_id = state.salvage_id
+        else: self.salvage = None
+        state.salvage = {}
+        self.start = 0
+        self.special = None
+        if state.special:
+            self.special = state.special
+        self.mimic = state.mimic
+        self.max_stacks = state.max_stacks
+        self.passing_effect = state.passing_effect
+        if self.passing_effect is not None:
+            self.passing_effect = {i: len(state.edges[i][1]) for i in self.passing_effect}
+        state.solver = self
+        target = state.target_moves
+        if self.salvage: target = state.salvage_moves
+        moves = self.solve_optimal(state, debug=debug, prnt=False, showprogress=showprogress, use_ids=use_ids)
+        red, green, black = '\033[91m', '\033[92m', '\033[00m'
+        if moves and target and len(moves)-1 > target:
+            print(red, moves[0], 'Len', len(moves)-1, 'exceeded target of ', target, black)
+        if moves and target and len(moves)-1 < target:
+            print(green, moves[0], 'Target beaten! New target:', len(moves)-1, black)
+        if print_moves:
+            self.print_moves(moves, verbose)
+        return moves
     def check_state(self, state): #Place to add some extra logic
         prev = state.previous
         if not self.special:
@@ -421,15 +605,20 @@ class LockpickSolver(Solver):
         elif self.special == '9-3':
             if state.last_move == 8:
                 return False
-            if state.last_move == 2 and 1 not in state.access and len(state.edges[1][1]) == 5:
+            if state.last_move == 2 and len(state.edges[1][1]) == 5 and len(state.edges[5][1]) == 5:
                 return False
-            if state.last_move == 3 and 1 not in state.access and len(state.edges[2][1]) == 5:
+            if state.last_move == 3 and len(state.edges[2][1]) == 5 and len(state.edges[6][1]) == 5:
                 return False
             total = sum(state.stock.values())
             for e in state.edges:
+                count_blast = 0
                 for l in e[1]:
+                    l = Catalog.get(l)
+                    if type(l[1]) is str and l[-1] == 'x':
+                        count_blast += 1
                     if type(l[1]) is str and l[1].islower():
                         total += int(l[2][-1]) if l[2] else 1
+                if count_blast >= 2: total -= 1
             if total < 32:
                 return False
         elif self.special == '9-B':
@@ -460,124 +649,33 @@ class LockpickSolver(Solver):
             if 'u' in state.stock: del state.stock['u']
             if 'ui' in state.stock: del state.stock['ui']
             return True
+        elif self.special == 'T1-1':
+            if self.salvage is None and 'm*' in state.stock: return False
+            if self.salvage is not None:
+                if state.stock.get('c', 20) < 9: return False
+                if state.stock.get('w', 0) > 8: return False
+        elif self.special == 'T1-7':
+            if self.salvage is not None and 'w' in state.stock: return False
+        elif self.special == 'T3-1':
+            if state.last_move == 15 and len(prev.edges) == 22: return False
+        elif self.special == 'T3-5':
+            if '&' in state.salvage.get(17, ' ')[0]:
+                return False
+            if '&' in state.salvage.get(20, ' ')[0]:
+                return False
+        elif self.special == 'T3-6':
+            if prev.last_move is None: return True
+            if state.last_move <= 3 and prev.last_move >= 4 or prev.last_move <= 3 and state.last_move >= 4:
+                if prev.stock.get('c', 0) >= 10: return False
+            if state.last_move <= 4 and prev.last_move >= 5 or prev.last_move <= 4 and state.last_move >= 5:
+                if prev.stock.get('ci', 0) >= 10 or prev.stock.get('c', 0) <= -10: return False
+        elif self.special == 'T4-3':
+            if state.last_move == 4:
+                if prev.stock.get('m', 0) != 0 or prev.stock.get('mi', 0) != 0:
+                    return False
         return True
-    def check_finish(self, state):
-        return state.win
-    def print_moves(self, moves, verbose=False, pause=False):
-        red, yellow, green, blue, black = '\033[91m', '\033[93m', '\033[92m', '\033[94m', '\033[00m'
-        if verbose: print(moves[0])
-        for i, m in enumerate(moves):
-            if i == 0: continue
-            pm = moves[i-1]
-            print(str(i)+': ', end='')
-            locks = pm.edges[m.last_move][1]
-            next = m.edges[m.last_move][1]
-            for i2, lock in enumerate(locks):
-                lock = Catalog.get(lock)
-                if type(lock[1]) is list:
-                    if lock[1][1] and lock[1][0] == lock[1][1][0][1]:
-                        lock = (lock[0], '['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
-                    else:
-                        lock = (lock[0], lock[1][0] + '/['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
-                masterloc = i2 if m.last_access else len(locks) - i2 - 1
-                if '~' in lock[0]:
-                    lock = (lock[0].replace('~', ''), 'N', lock[2])
-                if lock[0] and lock[0][-1].isalpha():
-                    lock = (lock[0][:-1], lock[1], lock[2])
-                if m.last_access and i2 >= len(next) or \
-                 not m.last_access and i2 < len(locks) - len(next):
-                    if masterloc in m.master:
-                        print(yellow + lock[0] + lock[1] + lock[2], end=' ')
-                    else:
-                        print(red + lock[0] + lock[1] + lock[2], end=' ')
-                else:
-                    next_lock = next[i2] if m.last_access else next[i2 + len(next) - len(locks)]
-                    next_lock = Catalog.get(next_lock)
-                    if '~' in next_lock[0]:
-                        next_lock = (next_lock[0].replace('~', ''), 'N', next_lock[2])
-                    if next_lock[0] and next_lock[0][-1].isalpha():
-                        next_lock = (next_lock[0][:-1], next_lock[1], next_lock[2])
-                    aura = next_lock[0]
-                    for c in lock[0]:
-                        color = black if c in aura else red
-                        print(color + c, end='')
-                    if masterloc in m.master:
-                        print(yellow + lock[1] + lock[2], end=' ')
-                    elif lock[2] != next_lock[2]:
-                        print(red + lock[1] + lock[2] + black, end=' ')
-                    elif lock[1] != next_lock[1] and type(next_lock[1]) is not list:
-                        print(blue + next_lock[1] + lock[2] + black, end=' ')
-                    else:
-                        print(black + lock[1] + lock[2], end=' ')
-            if m.last_access:
-                print('<- ', end='')
-            if m.iview:
-                print(blue + 'I-View', end='')
-            print(black, end='')
-            if verbose: print(m)
-            if pause: input()
-            else: print()
-    def solve(self, state, debug=False, print_moves=True, verbose=False, showprogress=False):
-        Catalog.init()
-        state.edges = [(e[0], [Catalog.sadd(l) for l in e[1]], e[2]) for e in state.edges]
-        print(state)
-        self.start = 0
-        self.special = None
-        if state.special:
-            self.special = state.special
-        self.mimic = state.mimic
-        self.max_stacks = state.max_stacks
-        self.passing_effect = state.passing_effect
-        if self.passing_effect is not None:
-            self.passing_effect = {i: len(state.edges[i][1]) for i in self.passing_effect}
-        state.solver = self
-        target = state.target_moves
-        moves = self.solve_optimal(state, debug=debug, prnt=False, showprogress=showprogress)
-        red, green, black = '\033[91m', '\033[92m', '\033[00m'
-        if moves and target and len(moves)-1 > target:
-            print(red, moves[0], 'Len', len(moves)-1, 'exceeded target of ', target, black)
-        if moves and target and len(moves)-1 < target:
-            print(green, moves[0], 'Target beaten! New target:', len(moves)-1, black)
-        if print_moves:
-            self.print_moves(moves, verbose)
-        return moves
-
-def test(full=False, print_moves=False):
-    solver = LockpickSolver()
-    tests = [
-        p11, p21, p31, p41, p51,      p71, p81, p91, p101, p111,
-        p12, p22,      p42, p52, p62, p72, p82, p92, p102,
-        p13, p23, p33, p43,      p63, p73, p83,      p103, p113,
-        p14, p24, p34, p44, p54, p64, p74, p84, p94, p104, p114,
-        p15, p25, p35, p45, p55, p65, p75, p85, p95, p105, p115,
-        p16, p26, p36, p46, p56, p66, p76, p86, p96, p106, p116,
-        p17, p27, p37, p47, p57, p67,                p107, p117,
-        p18, p28,                p68, p78,           p108, p118,
-        p19, p29,                p69, 
-             p210,                    p710,                p1110,
-        p1A, p2A, p3A, p4A,      p6A,           p9A,       p1111,
-             p2B, p3B, p4B,      p6B, p7B, p8B,  
-        p1C, p2C,                p6C, p7C,
-             p2D,                               p9F]
-    extests = [p112, p53, p77, p87, p119, p110, p610,
-        p5A, p7A, p8A, p1B, p5B, p9B, p10B, p3D, p7D, p9D, p7E]
-        #Exclude 32, 3C, 48, 4C, 61, 79, 93, 9C, 109, 1010, 11A
-    if full: tests = extests + tests
-    start_time = time.time()
-    for i, puzzle in enumerate(tests):
-        if full and i == len(extests):
-            print("\033[92mAll extra tests passed!\033[00m")
-        print('Test', str(i+1)+'/'+str(len(tests)))
-        sol = solver.solve(puzzle, print_moves=print_moves)
-        if len(sol)-1 != puzzle.target_moves:
-            print('\033[91m')
-            solver.print_moves(sol)
-            print('Solve Failed, test terminated\033[00m')
-            return
-    elapsed = time.time() - start_time
-    print("\033[92mTest Complete in {:.2f} seconds.\033[00m".format(elapsed))
 
 if __name__ == "__main__":
-    #test(full=0, print_moves=0) #Time: ~83 sec
+    #test(full=0, print_moves=0) #Time: ~113 sec
 
-    LockpickSolver().solve(p3Cxi, verbose=0, debug=0, showprogress=1)
+    LockpickSolver().solve(p06, salvage=0, verbose=0, debug=0, use_ids=1)
