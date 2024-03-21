@@ -160,8 +160,7 @@ class LockpickState:
             self.salvage = {k:v for k,v in self.salvage.items()}
             if color == 'S':
                 id = int(num.split('X')[0])
-                if -id in self.salvage: aura, color, num = Catalog.get(self.salvage[-id])
-                else: aura, color, num = Catalog.get(self.salvage[id])
+                aura, color, num = Catalog.get(self.salvage[id])
             aura = aura.replace('!', '').replace('@', '').replace('#', '').replace('~', '')
             if aura and aura[-1].isalpha(): aura = aura[:-1] + 'Z'
             self.salvage[self.stock['s']] = Catalog.sadd((aura, color, num))
@@ -362,6 +361,12 @@ class LockpickState:
         if str((aura, color, num)) in self.solver.paint_results:
             return self.solver.paint_results[str((aura, color, num))]
         if isinstance(color, list):
+            matching_locks = []
+            for i1 in range(len(color[1])-1):
+                for i2 in range(i1+1, len(color[1])):
+                    if i1 == i2: continue
+                    if color[1][i1] == color[1][i2]:
+                        matching_locks.append((i1, i2))
             used = {str(color[1])}
             combos = [color[1][:]]
             for c in self.solver.omega:
@@ -371,18 +376,27 @@ class LockpickState:
                         locks = combo[:]
                         locks[i] = (locks[i][0], c, locks[i][2])
                         if str(locks) not in used:
-                            used.add(str(locks))
-                            combos.append(locks)
+                            for i1, i2 in matching_locks:
+                                if i1 > i or i2 > i: continue
+                                if locks[i2][1] < locks[i1][1]:
+                                    break
+                            else:
+                                used.add(str(locks))
+                                combos.append(locks)
             doors = []
             for combo in combos:
-                specials = []
-                for cl in 'MUZ':
-                    if any([cl in l[1] for l in combo]):
-                        specials.append(cl)
-                doors.append([color[0], combo] + specials)
-                for c in self.solver.omega:
-                    if color[0] == c: continue
-                    doors.append([c, combo] + specials)
+                for i1, i2 in matching_locks:
+                    if combo[i2][1] < combo[i1][1]:
+                        break
+                else:
+                    specials = []
+                    for cl in 'MUZ':
+                        if any([cl in l[1] for l in combo]):
+                            specials.append(cl)
+                    doors.append([color[0], combo] + specials)
+                    for c in self.solver.omega:
+                        if color[0] == c: continue
+                        doors.append([c, combo] + specials)
             doors = doors
             result = [(aura, d, num) for d in doors]
             self.solver.paint_results[str((aura, color, num))] = result 
@@ -476,7 +490,7 @@ def test(full=False, print_moves=False, salvages=True):
         p5A, p7A, p8A, p1B, p5B, p9B, p10B, p3D, p7D, p9D, p7E]
         #Exclude 32, 3C, 48, 4C, 61, 79, 93, 9C, 109, 1010, 11A
     salvagetests = [pt13, pt15, pt17, pt25, pt27, pt31, pt32, pt34, pt42, pt43,
-        pomegaO, pomegaL, pomegaG, pomegaB]
+        pomegaO, pomegaK, pomegaL, pomegaG, pomegaB]
     if full: tests = extests + tests
     if salvages: tests = salvagetests
     start_time = time.time()
@@ -643,7 +657,7 @@ class LockpickSolver(Solver):
         state.stock = {}
         state.last_move = None
         state.last_access = None
-        state.salvage = {abs(k): v for k, v in salvage.items() if k < 0 or -k not in salvage}
+        state.salvage = {abs(k): v for k, v in salvage.items() if k > 0 or -k not in salvage}
         state.edges = [(e[0], e[1][:], e[2]) for e in state.edges]
         new_edges = []
         for e in state.edges:
@@ -664,7 +678,7 @@ class LockpickSolver(Solver):
                         new_edges.append((e[2], [Catalog.sadd(('', color, num))], None))
                         continue
         state.edges = [(e[0], [Catalog.sadd(l) for l in e[1] if l is not None], e[2]) for e in state.edges] + new_edges
-        state.edges = [(e[0], [Catalog.sadd(('', 's', '0'))], e[2]) if not e[1] else e for e in state.edges]
+        state.edges = [(e[0], [Catalog.sadd(('', '<', '') if e[2] is None else ('', 's', '0'))], e[2]) if not e[1] else e for e in state.edges]
         return state
     def check_state(self, state): #Place to add some extra logic
         prev = state.previous
@@ -782,5 +796,5 @@ class LockpickSolver(Solver):
 if __name__ == "__main__":
     #test(full=0, print_moves=0, salvages=1) #Time: ~113 sec
     #puzz = parse('w10(s10|w|W5S10W0W|W4W0$')
-    #LockpickSolver().solve(pt42, salvage=0, verbose=0, debug=0, use_ids=1)
-    LockpickSolver().solve(pt13s2, salvage=1, verbose=0, debug=0, use_ids=1)
+    #LockpickSolver().solve(pt4R, salvage=0, verbose=0, debug=0, use_ids=1)
+    LockpickSolver().solve(po3, salvage=0, verbose=0, debug=0, use_ids=1)
