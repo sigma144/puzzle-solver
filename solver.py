@@ -20,7 +20,16 @@ class Catalog:
         _used[val] = len(_catalog) - 1
         return len(_catalog) - 1
     @staticmethod
+    def kadd(val, key):
+        global _catalog, _used
+        if key in _used:
+            return _used[key]
+        _catalog.append(val)
+        _used[key] = len(_catalog) - 1
+        return len(_catalog) - 1
+    @staticmethod
     def sadd(val):
+        if isinstance(val, int): assert False
         global _catalog, _used
         sval = repr(val)
         if sval in _used:
@@ -125,7 +134,6 @@ class Solver:
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
                     print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
-                    #self._prev_states = map() if use_score else set()
             if len(self._state_queue) == 0:
                 if use_score:
                     self._next_queue.pop(self._score)
