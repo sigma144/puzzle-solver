@@ -44,9 +44,11 @@ class Catalog:
 
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
+    solver_instance = None
     #Implement __hash__ and __eq__ for states
     def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, use_score=0, optimize_score=0, use_names=0, use_ids=0, **kwargs):
         start_time = time.time()
+        Solver.solver_instance = self
         self.kwargs = kwargs
         starting_state = self.setup(starting_state)
         starting_state.previous = None
@@ -66,6 +68,8 @@ class Solver:
         depth_last = 0
         depth_size = 0
         depth_start = 0
+        purge_num = 0
+        purge_countdown = 0
         if use_score or optimize_score:
             use_score = True
             starting_state._invalidate = False
@@ -129,11 +133,35 @@ class Solver:
             if count_iterate % 20000 == 0:
                 if showprogress:
                     print(state)
-                    #print(len(self._prev_states), len(self._state_queue), [len(q) for q in self._next_queue.values()] if isinstance(self._next_queue, dict) else len(self._next_queue))
                     print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
+                if purge_countdown > 0:
+                    purge_countdown -= 1
                 memuse = psutil.virtual_memory()[2]
                 if memuse >= 95:
-                    print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+                    if self.purge_state_check(state, purge_num) is None:
+                        print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+                    elif purge_countdown == 0:
+                        purge_num += 1
+                        print(Solver._red + "HIGH MEMORY USE, PURGING STATES (N=" + str(purge_num) + ")" + Solver._black)
+                        new_prev = set()
+                        while self._prev_states:
+                            s = self._prev_states.pop()
+                            if (self.purge_state_check(s, purge_num)):
+                                new_prev.add(s)
+                        self._prev_states = new_prev
+                        new_queue = deque()
+                        while self._state_queue:
+                            s = self._state_queue.popleft()
+                            if (self.purge_state_check(s, purge_num)):
+                                new_queue.append(s)
+                        self._state_queue = new_queue
+                        new_queue = deque()
+                        while self._next_queue:
+                            s = self._next_queue.popleft()
+                            if (self.purge_state_check(s, purge_num)):
+                                new_queue.append(s)
+                        self._next_queue = new_queue
+                        purge_countdown = 10
             if len(self._state_queue) == 0:
                 if use_score:
                     self._next_queue.pop(self._score)
@@ -242,6 +270,25 @@ class Solver:
     
     def score_state(self, state):
         return None
+    
+    def purge_state_check(self, state, purge_num):
+        return None
+
+@dataclass
+class Vec2:
+    x = 0; y = 0
+    def __init__(self, x, y, z): self.x = x; self.y = y
+    def __add__(self, v): return Vec3(self.x + v.x, self.y + v.y)
+    def __sub__(self, v): return Vec3(self.x - v.x, self.y - v.y)
+    def __mul__(self, v): return Vec3(self.x*v, self.y*v)
+    def __neg__(self): return Vec3(-self.x, -self.y)
+    def __repr__(self): return f"({self.x}, {self.y})"
+    def __iter__(self): return iter((self.x, self.y))
+    def __hash__(self): return hash((self.x, self.y))
+    def __eq__(self, v): return isinstance(v, Vec3) and v.x == self.x and v.y == self.y
+    def __lt__(self, v): return self.y < v.y if self.y != v.y else self.x < v.x
+    def __ge__(self, v): return self.y > v.y if self.y != v.y else self.x >= v.x
+    def __contains__(self, v): return 0 <= v.x < self.x and 0 <= v.y < self.y
 
 @dataclass
 class Vec3:
