@@ -70,6 +70,7 @@ class Solver:
         depth_start = 0
         purge_num = 0
         purge_countdown = 0
+        purge_history = []
         if use_score or optimize_score:
             use_score = True
             starting_state._invalidate = False
@@ -86,6 +87,8 @@ class Solver:
                 print("Moves:", len(move_list)-1)
             else:
                 print("Solved in", len(move_list)-1, "moves!")
+                if purge_num:
+                    print(Solver._red + str(purge_num) + " PURGE(S) USED " + str(purge_history) + Solver._black)
                 if self.score_state(state) is not None:
                     print("Score:", str(self.score_state(state)))
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
@@ -162,6 +165,7 @@ class Solver:
                                 new_queue.append(s)
                         self._next_queue = new_queue
                         purge_countdown = 10
+                        purge_history.append(self._depth)
             if len(self._state_queue) == 0:
                 if use_score:
                     self._next_queue.pop(self._score)
