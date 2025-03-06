@@ -5,12 +5,22 @@ import psutil
 from dataclasses import dataclass
 import pickle, bisect
 
-_catalog = _used = None
+_catalog = _used = _array_default = _catalog_variable = None
 class Catalog:
     @staticmethod
-    def init():
+    def init(starting_state=None, catalog_variable=None):
         global _catalog, _used
         _catalog = []; _used = {}
+        if starting_state is None: return
+        global _array_default
+        _array_default = getattr(starting_state, catalog_variable)
+        global _catalog_variable
+        _catalog_variable = catalog_variable
+        Catalog.pack(starting_state)
+        try:
+            hash(starting_state)
+        except TypeError:
+            type(starting_state).__hash__ = lambda x: hash(getattr(x, catalog_variable))
     @staticmethod
     def add(val):
         global _catalog, _used
@@ -29,7 +39,6 @@ class Catalog:
         return len(_catalog) - 1
     @staticmethod
     def sadd(val):
-        if isinstance(val, int): assert False
         global _catalog, _used
         sval = repr(val)
         if sval in _used:
@@ -38,15 +47,52 @@ class Catalog:
         _used[sval] = len(_catalog) - 1
         return len(_catalog) - 1
     @staticmethod
+    def tadd(val):
+        global _catalog, _used
+        tval = tuple(val)
+        if tval in _used:
+            return _used[tval]
+        _catalog.append(val)
+        _used[tval] = len(_catalog) - 1
+        return len(_catalog) - 1
+    @staticmethod
     def get(num):
         global _catalog
         return _catalog[num]
+    @staticmethod
+    def pack(state):
+        grid = getattr(state, _catalog_variable)
+        array = [0]
+        for i, row in enumerate(grid):
+            array[0] <<= 1
+            if row == _array_default[i]:
+                array[0] += 1
+            else:
+                n = Catalog.tadd(row)
+                array.append(n)
+        setattr(state, _catalog_variable, tuple(array))
+        return
+    @staticmethod
+    def unpack(state):
+        array = getattr(state, _catalog_variable)
+        grid = []
+        read_bit = 1 << len(_array_default) - 1
+        j = 1
+        for i in range(len(_array_default)):
+            if (array[0] & read_bit):
+                grid.append(_array_default[i])
+            else:
+                grid.append(Catalog.get(array[j]))
+                j += 1
+            read_bit >>= 1
+        setattr(state, _catalog_variable, grid)
+        return array
 
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver_instance = None
     #Implement __hash__ and __eq__ for states
-    def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, use_score=0, optimize_score=0, use_names=0, use_ids=0, **kwargs):
+    def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, catalog_variable=0, use_score=0, optimize_score=0, use_names=0, use_ids=0, **kwargs):
         start_time = time.time()
         Solver.solver_instance = self
         self.kwargs = kwargs
@@ -54,6 +100,8 @@ class Solver:
         starting_state.previous = None
         print(starting_state)
         print("Solving...")
+        if catalog_variable:
+            Catalog.init(starting_state, catalog_variable)
         self._prev_states = {starting_state}
         self._state_queue = deque()
         self._state_queue.append(starting_state)
@@ -81,7 +129,7 @@ class Solver:
             self._score = score
         def finish_solve(state):
             elapsed = time.time() - start_time
-            move_list = self.trace_moves(state, prnt, diff, diff_trail, use_names, use_ids)
+            move_list = self.trace_moves(state, prnt, diff, diff_trail, use_names, use_ids, catalog_variable)
             if optimize_score:
                 print("Solved with score", str(self.score_state(state))+"!")
                 print("Moves:", len(move_list)-1)
@@ -96,6 +144,8 @@ class Solver:
         while True:
             count_iterate += 1
             state = self._state_queue.popleft()
+            if catalog_variable:
+                catalog_array = Catalog.unpack(state)
             if debug: print(state, "\n^ Current" + (': ' + state.name if use_names else '') + "\n")
             if use_score and state._invalidate: next = []
             else: next = self.get_next_states(state)
@@ -130,7 +180,10 @@ class Solver:
                     self._next_queue[score].append(s)
                     if score[0] == self._depth: depth_size += 1
                 else:
-                    if self.check_finish(s): return finish_solve(s)
+                    if self.check_finish(s):
+                        return finish_solve(s)
+                    if catalog_variable:
+                        Catalog.pack(s)
                     if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)) or hint:
                         self._next_queue.append(s)
             if count_iterate % 20000 == 0:
@@ -144,29 +197,41 @@ class Solver:
                     if self.purge_state_check(state, purge_num) is None:
                         print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
                     elif purge_countdown == 0:
+                        setattr(state, catalog_variable, catalog_array)
                         purge_num += 1
                         print(Solver._red + "HIGH MEMORY USE, PURGING STATES (N=" + str(purge_num) + ")" + Solver._black)
                         new_prev = set()
                         while self._prev_states:
                             s = self._prev_states.pop()
+                            array = Catalog.unpack(s)
                             if (self.purge_state_check(s, purge_num)):
+                                setattr(s, catalog_variable, array)
                                 new_prev.add(s)
+                            else: setattr(s, catalog_variable, array)
                         self._prev_states = new_prev
                         new_queue = deque()
                         while self._state_queue:
                             s = self._state_queue.popleft()
+                            array = Catalog.unpack(s)
                             if (self.purge_state_check(s, purge_num)):
+                                setattr(s, catalog_variable, array)
                                 new_queue.append(s)
+                            #else: setattr(s, catalog_variable, array)
                         self._state_queue = new_queue
                         new_queue = deque()
                         while self._next_queue:
                             s = self._next_queue.popleft()
+                            array = Catalog.unpack(s)
                             if (self.purge_state_check(s, purge_num)):
+                                setattr(s, catalog_variable, array)
                                 new_queue.append(s)
+                            #else: setattr(s, catalog_variable, array)
                         self._next_queue = new_queue
                         purge_countdown = 10
                         purge_history.append(self._depth)
+                        Catalog.unpack(state)
             if len(self._state_queue) == 0:
+                #self._prev_states = set()
                 if use_score:
                     self._next_queue.pop(self._score)
                     if len(self._next_queue) == 0:
@@ -195,18 +260,24 @@ class Solver:
                 depth_last = elapsed
                 depth_time = time.time()
                 print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+            if catalog_variable:
+                setattr(state, catalog_variable, catalog_array)
         print("No solution exists.")
         if best_state is not None:
             print("Best state", best_state)
+        if purge_num:
+            print(Solver._red + str(purge_num) + " PURGE(S) USED " + str(purge_history) + Solver._black)
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
     @staticmethod
-    def trace_moves(s, prnt=0, diff=1, diff_trail=0, use_names=0, use_ids=0):
+    def trace_moves(s, prnt=0, diff=1, diff_trail=0, use_names=0, use_ids=0, catalog_variable=0):
         move_list = [s]
         while s.previous is not None:
             move_list.insert(0, s.previous)
             s = s.previous
+            if catalog_variable and isinstance(getattr(s, catalog_variable)[0], int):
+                Catalog.unpack(s)
         if prnt:
             if diff:
                 strs = [str(m) for m in move_list]

@@ -1,6 +1,5 @@
 import pickle
 from solver import Solver, Catalog
-#import numpy as np
 
 CHARS = ' #*X^v<>BYOUDLRWSF+-{}byoudlrwsf'
 SPACE, WALL, EXIT, BLOCK, UP, DOWN, LEFT, RIGHT, SQUARE, DIAMOND, CIRCLE,  \
@@ -10,11 +9,11 @@ CSYMUP, CSYMDOWN, CSYMLEFT, CSYMRIGHT, CSYMSQUARE, CSYMDIAMOND, CSYMCIRCLE \
     = range(len(CHARS))
 
 trapsL = trapsR = trapsU = trapsD = []
-use_catalog = True #Catalog makes solve slower, but is more memory efficient
 
 class AbridgeState:
     def __hash__(self):
-        return hash(pickle.dumps(self.board))        
+        #return hash(pickle.dumps(self.board)) 
+        return hash(self.board) 
     def __eq__(self, state):
         return self.board == state.board
     def hash_score(self):
@@ -22,21 +21,20 @@ class AbridgeState:
     def eq_score(self, state):
         return self.controlled_tile == state.controlled_tile and self.board == state.board 
     def __repr__(self) -> str:
-        if use_catalog: return '\n'.join([''.join([CHARS[n] for n in Catalog.get(row)]) for row in self.board])
+        #if use_catalog: return '\n'.join([''.join([CHARS[n] for n in Catalog.get(row)]) for row in self.board])
         return '\n'.join([''.join([CHARS[n] for n in row]) for row in self.board])
         #return '\n'.join([''.join([CHARS[n] for n in row]) for row in self.board]) + str(self.controlled_tile) + str(self.state_score)
     def set(self, x, y, val):
         self.board[y] = self.board[y][:]
-        #self.board[y] = bytearray(self.board[y])
         self.board[y][x] = val
     def copy(self):
         state = AbridgeState()
         state.board = self.board[:]
         state.tiles_left = self.tiles_left
         state.circles_left = self.circles_left
-        state.symhints = self.symhints
-        state.controlled_tile = self.controlled_tile
-        state.state_score = self.state_score
+        #state.symhints = self.symhints
+        #state.controlled_tile = self.controlled_tile
+        #state.state_score = self.state_score
         return state
     def push(self, x, y, dx, dy):
         nextx, nexty = x+dx, y+dy
@@ -91,16 +89,16 @@ class AbridgeState:
         if mirror and pair is not None:
             if pair[1] > cy or pair[1] == cy and pair[0] > cx:
                 cx, cy = pair
-        if new_state.controlled_tile != (cx, cy):
-            new_state.state_score += 1
-        new_state.controlled_tile = (cx + dx, cy + dy)
+        #if new_state.controlled_tile != (cx, cy):
+        #    new_state.state_score += 1
+        #new_state.controlled_tile = (cx + dx, cy + dy)
         result = new_state.push(x, y, dx, dy)
         if not result: return None
         if mirror and not pull:
             if pair is None:
                 new_state.set(x+dx, y+dy, self.unsym(new_state.board[y+dy][x+dx]))
                 if corrupt: new_state.set(x, y, WALL)
-                if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
+                #if use_catalog: new_state.board = [Catalog.tadd(r) for r in new_state.board]
                 return new_state
             x2, y2 = pair
             dx2, dy2 = dx, dy
@@ -120,7 +118,7 @@ class AbridgeState:
             if pair is None:
                 if new_state.board[y+dy+dy][x+dx+dx] == SYMCIRCLE:
                     new_state.set(x+dx+dx, y+dy+dy, CIRCLE)
-                if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
+                #if use_catalog: new_state.board = [Catalog.tadd(r) for r in new_state.board]
                 return new_state
             x2, y2 = pair
             result = new_state.push(x2-dx, y2-dy, dx, dy)
@@ -148,7 +146,7 @@ class AbridgeState:
         #if new_state.board[3][3] == DOWN or new_state.board[3][3] == LEFT:
         #    if new_state.board[3][2] == SPACE and new_state.board[3][1] == SPACE: return None
         if corrupt: new_state.set(x, y, WALL)
-        if use_catalog: new_state.board = [Catalog.sadd(r) for r in new_state.board]
+        #if use_catalog: new_state.board = [Catalog.tadd(r) for r in new_state.board]
         return new_state
     def is_trapped(self, x, y, tile):
         if tile == UP and trapsU[y][x] or \
@@ -210,11 +208,11 @@ class AbridgeState:
 
 class AbridgeSolver(Solver):
     def setup(self, board):
-        if use_catalog: Catalog.init()
+        #if use_catalog: Catalog.init()
         starting_state = AbridgeState()
         board = [[CHARS.index(c) for c in row] for row in board]
-        #board = [bytearray([CHARS.index(c) for c in row]) for row in board]
         starting_state.board = board
+        self.open_tiles = [(x, y) for y, row in enumerate(board) for x, val in enumerate(row) if val != WALL and val != EXIT]
         starting_state.tiles_left = sum([sum([val not in [SPACE, WALL, EXIT] for val in row]) for row in board])
         self.tiles_max = starting_state.tiles_left
         starting_state.circles_left = sum([sum([val == CIRCLE or val == SYMCIRCLE for val in row]) for row in board])
@@ -229,114 +227,110 @@ class AbridgeSolver(Solver):
                     starting_state.symhints[hint] = (x, y)
         self.detect_traps(starting_state)
         for l in [trapsU, trapsD, trapsL, trapsR]: print('\n'.join([''.join([str(int(n)) for n in row]) for row in l])+'\n')
-        if use_catalog: starting_state.board = [Catalog.sadd(r) for r in starting_state.board]
+        #if use_catalog: starting_state.board = [Catalog.tadd(r) for r in starting_state.board]
         return starting_state
     def get_next_states(self, state):
         states = []
         state = state.copy()
-        if use_catalog: state.board = [Catalog.get(r) for r in state.board]
-        for y, row in enumerate(state.board):
-            for x, val in enumerate(row):
-                if val == SPACE or val == WALL or val == EXIT or val == BLOCK:
-                    continue
-                if val == UP:
-                    states.append(state.copy_and_push(x, y, 0, -1))
-                elif val == LEFT:
-                    states.append(state.copy_and_push(x, y, -1, 0))
-                elif val == RIGHT:
-                    states.append(state.copy_and_push(x, y, 1, 0))
-                elif val == DOWN:
-                    states.append(state.copy_and_push(x, y, 0, 1))
-                elif val == SQUARE:
-                    states.append(state.copy_and_push(x, y, 0, -1))
-                    states.append(state.copy_and_push(x, y, -1, 0))
-                    states.append(state.copy_and_push(x, y, 1, 0))
-                    states.append(state.copy_and_push(x, y, 0, 1))
-                elif val == DIAMOND:
-                    states.append(state.copy_and_push(x, y, -1, -1))
-                    states.append(state.copy_and_push(x, y, -1, 1))
-                    states.append(state.copy_and_push(x, y, 1, -1))
-                    states.append(state.copy_and_push(x, y, 1, 1))
-                elif val == CIRCLE:
-                    states.append(state.copy_and_push(x, y+1, 0, -1, pull=True))
-                    states.append(state.copy_and_push(x+1, y, -1, 0, pull=True))
-                    states.append(state.copy_and_push(x-1, y, 1, 0, pull=True))
-                    states.append(state.copy_and_push(x, y-1, 0, 1, pull=True))
-                #Corrupted
-                elif val == CORRUP:
-                    states.append(state.copy_and_push(x, y, 0, -1, corrupt=True))
-                elif val == CORRLEFT:
-                    states.append(state.copy_and_push(x, y, -1, 0, corrupt=True))
-                elif val == CORRRIGHT:
-                    states.append(state.copy_and_push(x, y, 1, 0, corrupt=True))
-                elif val == CORRDOWN:
-                    states.append(state.copy_and_push(x, y, 0, 1, corrupt=True))
-                elif val == CORRSQUARE:
-                    states.append(state.copy_and_push(x, y, 0, -1, corrupt=True))
-                    states.append(state.copy_and_push(x, y, -1, 0, corrupt=True))
-                    states.append(state.copy_and_push(x, y, 1, 0, corrupt=True))
-                    states.append(state.copy_and_push(x, y, 0, 1, corrupt=True))
-                    if states[-1] is None and states[-2] is None and states[-3] is None and states[-4] is None:
-                        if (state.board[y-1][x-1] == WALL or state.board[y+1][x+1] == WALL) and \
-                            (state.board[y+1][x-1] == WALL or state.board[y-1][x+1] == WALL):
-                            return []
-                elif val == CORRDIAMOND:
-                    states.append(state.copy_and_push(x, y, -1, -1, corrupt=True))
-                    states.append(state.copy_and_push(x, y, -1, 1, corrupt=True))
-                    states.append(state.copy_and_push(x, y, 1, -1, corrupt=True))
-                    states.append(state.copy_and_push(x, y, 1, 1, corrupt=True))
-                    if states[-1] is None and states[-2] is None and states[-3] is None and states[-4] is None:
-                        if (state.board[y-1][x] == WALL or state.board[y+1][x] == WALL) and \
-                            (state.board[y][x-1] == WALL or state.board[y][x+1] == WALL):
-                            return []
-                #elif val == CORRCIRCLE:
-                #    pass
-                #Mirror
-                elif val == SYMUP:
-                    states.append(state.copy_and_push(x, y, 0, -1, mirror=True))
-                elif val == SYMLEFT:
-                    states.append(state.copy_and_push(x, y, -1, 0, mirror=True))
-                elif val == SYMRIGHT:
-                    states.append(state.copy_and_push(x, y, 1, 0, mirror=True))
-                elif val == SYMDOWN:
-                    states.append(state.copy_and_push(x, y, 0, 1, mirror=True))
-                elif val == SYMSQUARE:
-                    states.append(state.copy_and_push(x, y, 0, -1, mirror=True))
-                    states.append(state.copy_and_push(x, y, -1, 0, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, 0, mirror=True))
-                    states.append(state.copy_and_push(x, y, 0, 1, mirror=True))
-                elif val == SYMDIAMOND:
-                    states.append(state.copy_and_push(x, y, -1, -1, mirror=True))
-                    states.append(state.copy_and_push(x, y, -1, 1, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, -1, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, 1, mirror=True))
-                elif val == SYMCIRCLE:
-                    states.append(state.copy_and_push(x, y+1, 0, -1, mirror=True, pull=True))
-                    states.append(state.copy_and_push(x+1, y, -1, 0, mirror=True, pull=True))
-                    states.append(state.copy_and_push(x-1, y, 1, 0, mirror=True, pull=True))
-                    states.append(state.copy_and_push(x, y-1, 0, 1, mirror=True, pull=True))
-                #Corrupted mirror
-                elif val == CSYMUP:
-                    states.append(state.copy_and_push(x, y, 0, -1, corrupt=True, mirror=True))
-                elif val == CSYMLEFT:
-                    states.append(state.copy_and_push(x, y, -1, 0, corrupt=True, mirror=True))
-                elif val == CSYMRIGHT:
-                    states.append(state.copy_and_push(x, y, 1, 0, corrupt=True, mirror=True))
-                elif val == CSYMDOWN:
-                    states.append(state.copy_and_push(x, y, 0, 1, corrupt=True, mirror=True))
-                elif val == CSYMSQUARE:
-                    states.append(state.copy_and_push(x, y, 0, -1, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, -1, 0, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, 0, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, 0, 1, corrupt=True, mirror=True))
-                elif val == CSYMDIAMOND:
-                    states.append(state.copy_and_push(x, y, -1, -1, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, -1, 1, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, -1, corrupt=True, mirror=True))
-                    states.append(state.copy_and_push(x, y, 1, 1, corrupt=True, mirror=True))
-                #elif val == CSYMCIRCLE:
-                #    pass
+        #if use_catalog: state.board = [Catalog.get(r) for r in state.board]
+        for x, y in self.open_tiles:
+            val = state.board[y][x]
+            if val == SPACE or val == WALL or val == EXIT or val == BLOCK:
+                continue
+            if val == UP:
+                states.append(state.copy_and_push(x, y, 0, -1))
+            elif val == LEFT:
+                states.append(state.copy_and_push(x, y, -1, 0))
+            elif val == RIGHT:
+                states.append(state.copy_and_push(x, y, 1, 0))
+            elif val == DOWN:
+                states.append(state.copy_and_push(x, y, 0, 1))
+            elif val == SQUARE:
+                states.append(state.copy_and_push(x, y, 0, -1))
+                states.append(state.copy_and_push(x, y, -1, 0))
+                states.append(state.copy_and_push(x, y, 1, 0))
+                states.append(state.copy_and_push(x, y, 0, 1))
+            elif val == DIAMOND:
+                states.append(state.copy_and_push(x, y, -1, -1))
+                states.append(state.copy_and_push(x, y, -1, 1))
+                states.append(state.copy_and_push(x, y, 1, -1))
+                states.append(state.copy_and_push(x, y, 1, 1))
+            elif val == CIRCLE:
+                states.append(state.copy_and_push(x, y+1, 0, -1, pull=True))
+                states.append(state.copy_and_push(x+1, y, -1, 0, pull=True))
+                states.append(state.copy_and_push(x-1, y, 1, 0, pull=True))
+                states.append(state.copy_and_push(x, y-1, 0, 1, pull=True))
+            #Corrupted
+            elif val == CORRUP:
+                states.append(state.copy_and_push(x, y, 0, -1, corrupt=True))
+            elif val == CORRLEFT:
+                states.append(state.copy_and_push(x, y, -1, 0, corrupt=True))
+            elif val == CORRRIGHT:
+                states.append(state.copy_and_push(x, y, 1, 0, corrupt=True))
+            elif val == CORRDOWN:
+                states.append(state.copy_and_push(x, y, 0, 1, corrupt=True))
+            elif val == CORRSQUARE:
+                states.append(state.copy_and_push(x, y, 0, -1, corrupt=True))
+                states.append(state.copy_and_push(x, y, -1, 0, corrupt=True))
+                states.append(state.copy_and_push(x, y, 1, 0, corrupt=True))
+                states.append(state.copy_and_push(x, y, 0, 1, corrupt=True))
+                if states[-1] is None and states[-2] is None and states[-3] is None and states[-4] is None:
+                    if (state.board[y-1][x-1] == WALL or state.board[y+1][x+1] == WALL) and \
+                        (state.board[y+1][x-1] == WALL or state.board[y-1][x+1] == WALL):
+                        return []
+            elif val == CORRDIAMOND:
+                states.append(state.copy_and_push(x, y, -1, -1, corrupt=True))
+                states.append(state.copy_and_push(x, y, -1, 1, corrupt=True))
+                states.append(state.copy_and_push(x, y, 1, -1, corrupt=True))
+                states.append(state.copy_and_push(x, y, 1, 1, corrupt=True))
+                if states[-1] is None and states[-2] is None and states[-3] is None and states[-4] is None:
+                    if (state.board[y-1][x] == WALL or state.board[y+1][x] == WALL) and \
+                        (state.board[y][x-1] == WALL or state.board[y][x+1] == WALL):
+                        return []
+            elif val == SYMUP:
+                states.append(state.copy_and_push(x, y, 0, -1, mirror=True))
+            elif val == SYMLEFT:
+                states.append(state.copy_and_push(x, y, -1, 0, mirror=True))
+            elif val == SYMRIGHT:
+                states.append(state.copy_and_push(x, y, 1, 0, mirror=True))
+            elif val == SYMDOWN:
+                states.append(state.copy_and_push(x, y, 0, 1, mirror=True))
+            elif val == SYMSQUARE:
+                states.append(state.copy_and_push(x, y, 0, -1, mirror=True))
+                states.append(state.copy_and_push(x, y, -1, 0, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, 0, mirror=True))
+                states.append(state.copy_and_push(x, y, 0, 1, mirror=True))
+            elif val == SYMDIAMOND:
+                states.append(state.copy_and_push(x, y, -1, -1, mirror=True))
+                states.append(state.copy_and_push(x, y, -1, 1, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, -1, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, 1, mirror=True))
+            elif val == SYMCIRCLE:
+                states.append(state.copy_and_push(x, y+1, 0, -1, mirror=True, pull=True))
+                states.append(state.copy_and_push(x+1, y, -1, 0, mirror=True, pull=True))
+                states.append(state.copy_and_push(x-1, y, 1, 0, mirror=True, pull=True))
+                states.append(state.copy_and_push(x, y-1, 0, 1, mirror=True, pull=True))
+            #Corrupted mirror
+            elif val == CSYMUP:
+                states.append(state.copy_and_push(x, y, 0, -1, corrupt=True, mirror=True))
+            elif val == CSYMLEFT:
+                states.append(state.copy_and_push(x, y, -1, 0, corrupt=True, mirror=True))
+            elif val == CSYMRIGHT:
+                states.append(state.copy_and_push(x, y, 1, 0, corrupt=True, mirror=True))
+            elif val == CSYMDOWN:
+                states.append(state.copy_and_push(x, y, 0, 1, corrupt=True, mirror=True))
+            elif val == CSYMSQUARE:
+                states.append(state.copy_and_push(x, y, 0, -1, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, -1, 0, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, 0, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, 0, 1, corrupt=True, mirror=True))
+            elif val == CSYMDIAMOND:
+                states.append(state.copy_and_push(x, y, -1, -1, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, -1, 1, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, -1, corrupt=True, mirror=True))
+                states.append(state.copy_and_push(x, y, 1, 1, corrupt=True, mirror=True))
         return [s for s in states if s is not None]
+    
     def detect_traps(self, state):
         global trapsL; trapsL = [[True for _ in row] for row in state.board]
         global trapsR; trapsR = [[True for _ in row] for row in state.board]
@@ -351,11 +345,11 @@ class AbridgeSolver(Solver):
                 trapsD[y][x] = not state.can_escape(x, y, 0, -1, diagonal)
     def check_finish(self, state):
         return state.tiles_left <= 0
-    #def check_state(self, state):
-    #    return 10 - state.tiles_left >= (Solver.solver_instance._depth - 20) // 20
-    def score_state(self, state):
-        return state.state_score
+    #def score_state(self, state):
+    #    return state.state_score
     def purge_state_check(self, state, purge_num):
+        #if purge_num <= 1:
+        #    return state.board[4][9] == UP or state.board[4][10] == UP or state.board[4][11] == UP
         return state.tiles_left <= self.tiles_max - purge_num
 
 def from_strs(strs):
@@ -373,28 +367,6 @@ puzzle_doubles = [ #Failed even after 45000K+ iterations, this will need a LOT o
     ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
 ]
 
-puzzle_w03 = [
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#','#','#','*','*','*','#','#','#'],
-    ['#','#',' ',' ','X',' ',' ','#','#'],
-    ['#',' ',' ','X',' ','X',' ',' ','#'],
-    ['#',' ','X',' ',' ',' ','X',' ','#'],
-    ['#',' ',' ','X',' ','X',' ',' ','#'],
-    ['#','#','Y',' ','X',' ','Y','#','#'],
-    ['#','#','#',' ','Y',' ','#','#','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_w06 = [
-    ['#','#','#','#','#','#','#'],
-    ['#','^',' ',' ',' ','O','#'],
-    ['#',' ','X','X','X',' ','#'],
-    ['#',' ','X','*','X',' ','#'],
-    ['#',' ','X','X','X',' ','#'],
-    ['#','B',' ',' ',' ','Y','#'],
-    ['#','#','#','#','#','#','#'],
-]
-
 puzzle_follow_the_leader = [ #Approximated
     ['#','#','#','#','#','#','#','#','#'],
     ['#',' ',' ',' ','#',' ',' ',' ','#'],
@@ -407,7 +379,7 @@ puzzle_follow_the_leader = [ #Approximated
     ['#','#','#','#','#','#','#','#','#'],
 ]
 
-puzzle_scattered = [ #Didn't solve after 60000K+ iterations, need pruning!
+puzzle_scattered = [ #Approximated
     ['#','#','#','#','#','#','#','#','#'],
     ['#','b',' ',' ',' ',' ',' ','b','#'],
     ['#',' ',' ','#','#','#',' ',' ','#'],
@@ -542,12 +514,12 @@ USE_CACHE = 0
 
 import cProfile
 import pstats
-profiler = cProfile.Profile()
-profiler.enable()
-AbridgeSolver().solve_optimal(puzzle_misdirection, debug=0, showprogress=1, use_score=USE_SCORE, use_cache=USE_CACHE)
-profiler.disable()
-stats = pstats.Stats(profiler)
-stats.sort_stats('cumulative').print_stats(10)  # Print top 10 stats
+#profiler = cProfile.Profile()
+#profiler.enable()
+AbridgeSolver().solve_optimal(puzzle_expedition, debug=0, showprogress=1, use_score=USE_SCORE, catalog_variable="board")
+#profiler.disable()
+#stats = pstats.Stats(profiler)
+#stats.sort_stats('cumulative').print_stats(10)  # Print top 10 stats
 
 puzzle_blank = [
     ['#','#','#','#','#','#','#'],
