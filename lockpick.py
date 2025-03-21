@@ -13,7 +13,6 @@ class LockpickState:
         self.master = []
         self.win = False
         self.terminate = False
-        self.solver = None
         self.iview = False
         self.iviewmoves = []
         self.salvage = {}
@@ -43,7 +42,7 @@ class LockpickState:
         s += 'Score: ' + str(self.score) + '\n'
         if self.previous:
             s += 'Last move:' + str(self.last_move) + ' ' + str(self.last_access) + '\n'
-        for e, (start, end) in enumerate(self.solver.edges):
+        for e, (start, end) in enumerate(Solver.solver.edges):
             s += str(start) + ' -> ' + ' '.join([str(Catalog.get(lock)[0])+str(Catalog.get(lock)[1])+str(Catalog.get(lock)[2]) for lock in self.edge(e)]) + ' -> ' + str(end) + '\n'
         return s
     def copy(self, i, back):
@@ -52,8 +51,7 @@ class LockpickState:
         s.last_access = back
         s.master = self.master
         s.iviewmoves = self.iviewmoves
-        s.previous = self.previous
-        s.solver = self.solver
+        #s.previous = self.previous
         s.salvage = self.salvage
         s.gates = self.gates
         s.level_num = self.level_num
@@ -153,8 +151,8 @@ class LockpickState:
                 sign = -1 if int(stacks) < 0 else 1
             if self.iview: imag -= sign
             else: real -= sign
-            if max(abs(imag), abs(real)) > self.solver.max_stacks - 1:
-                if max(abs(imag), abs(real)) > self.solver.max_stacks:
+            if max(abs(imag), abs(real)) > Solver.solver.max_stacks - 1:
+                if max(abs(imag), abs(real)) > Solver.solver.max_stacks:
                     return False
                 self.win = 'Open copy'
             if real == 1 and imag == 0:
@@ -171,8 +169,8 @@ class LockpickState:
                 self.terminate = True
                 return True
         elif sign == -1:
-            if not self.iview and self.solver.max_stacks == 1: return False
-            if self.solver.max_stacks == 2: self.win = 'Open copy'
+            if not self.iview and Solver.solver.max_stacks == 1: return False
+            if Solver.solver.max_stacks == 2: self.win = 'Open copy'
             seq[si] = Catalog.sadd((aura, color, num + 'X' + ('1+1i' if self.iview else '2')))
             self.edges[i] = Catalog.sadd(seq)
             self.terminate = True
@@ -192,13 +190,13 @@ class LockpickState:
             if aura and aura[-1].isalpha(): aura = aura[:-1] + 'Z'
             self.salvage[sid] = Catalog.sadd((aura, color, num))
             if -sid in self.salvage: self.salvage.pop(-sid)
-            if self.solver.salvage is None:
+            if Solver.solver.salvage is None:
                 self.win = 'Salvage'
                 seq.pop(si)
                 self.edges[i] = Catalog.sadd(seq)
                 return True
-            if (color, num) != self.solver.salvage: return False
-            if self.solver.salvage_id is not None and sid != self.solver.salvage_id: return False
+            if (color, num) != Solver.solver.salvage: return False
+            if Solver.solver.salvage_id is not None and sid != Solver.solver.salvage_id: return False
             for e in self.edges:
                 if Catalog.sadd(('', '^', '')) in Catalog.get(e):
                     return False
@@ -207,7 +205,7 @@ class LockpickState:
         if len(seq) > 0 and seq[si] == Catalog.sadd(('', '^', '')):
             seq.pop(si)
         if len(seq) == 0:
-            new_access = self.solver.edges[i][0] if si == -1 else self.solver.edges[i][1]
+            new_access = Solver.solver.edges[i][0] if si == -1 else Solver.solver.edges[i][1]
             self.add_access(new_access)
         self.edges[i] = Catalog.sadd(seq)
         return True
@@ -215,7 +213,7 @@ class LockpickState:
         if room is None or room in self.access: return
         self.access = set(self.access)
         self.access.add(room)
-        for i, (start, end) in enumerate(self.solver.edges):
+        for i, (start, end) in enumerate(Solver.solver.edges):
             if self.edges[i]: continue
             if start == room: self.add_access(end)
             if end == room: self.add_access(start)
@@ -293,7 +291,7 @@ class LockpickState:
             if type(color) is list:
                 color = ['N', [(l[0], 'N', l[2]) for l in color[1]]]
             else: color = 'N'
-        elif self.solver.mimic and aura and aura[-1].isalpha():
+        elif Solver.solver.mimic and aura and aura[-1].isalpha():
             if type(color) is list:
                 color = [color[0].replace('Z', aura[-1]), [(l[0], l[1].replace('Z', aura[-1]), l[2]) for l in color[1]]] + color[2:]
             else: color = color.replace('Z', aura[-1]).replace('z', aura[-1].lower())
@@ -308,7 +306,7 @@ class LockpickState:
         #Infinite Keys
         if type(color) is list and color[0] == '∞':
             seq = color[1]
-            for mult in range(1, self.solver.mult_max+1):
+            for mult in range(1, Solver.solver.mult_max+1):
                 state = state.copy(i, back)
                 state.collect_keys(aura[-1].lower() if seq[0][1] == 'z' else seq[0][1], seq[0][2] or '1')
                 state.terminate = True
@@ -320,8 +318,8 @@ class LockpickState:
                 next_states.append(state2)
             return next_states
         #Passing Effect
-        if self.solver.passing_effect is not None and i-1 in self.solver.passing_effect:
-            if len(state.edge(i-1)) == self.solver.passing_effect[i-1]:
+        if Solver.solver.passing_effect is not None and i-1 in Solver.solver.passing_effect:
+            if len(state.edge(i-1)) == Solver.solver.passing_effect[i-1]:
                 seq2 = state.edge(i-1)[:]
                 aura1, color1, num1 = Catalog.get(seq2[0])
                 aura2 = state.apply_effects(aura1, color1)
@@ -330,7 +328,7 @@ class LockpickState:
                     state.edges[i-1] = Catalog.sadd(seq2)
         #Specials
         if color == '$':
-            if state.level_num is not None or isinstance(self.solver.salvage, tuple):
+            if state.level_num is not None or isinstance(Solver.solver.salvage, tuple):
                 return []
             for e in state.edges:
                 if ('', '^', '') in Catalog.get(e):
@@ -392,7 +390,7 @@ class LockpickState:
             if spend != '-':
                 if amountr: state.spend_keys(spend.lower(), amountr)
                 if amounti: state.spend_keys(spend.lower()+'i', amounti)
-                if self.solver.mimic:
+                if Solver.solver.mimic:
                     state.mimic_color(spend)
                     if aura and aura[0].isalpha():
                         aura = aura[:-1] + spend
@@ -403,7 +401,7 @@ class LockpickState:
             amountr, amounti = state.spend_amount(color, num)
             if amountr: state.spend_keys(color[0].lower(), amountr)
             if amounti: state.spend_keys(color[0].lower()+'i', amounti)
-            if self.solver.mimic:
+            if Solver.solver.mimic:
                 state.mimic_color(color[0])
                 if aura and aura[0].isalpha():
                     aura = aura[:-1] + color[0]
@@ -411,8 +409,8 @@ class LockpickState:
             next_states.append(state)
         return next_states
     def get_painted_doors(self, aura, color, num):
-        if str((aura, color, num)) in self.solver.paint_results:
-            return self.solver.paint_results[str((aura, color, num))]
+        if str((aura, color, num)) in Solver.solver.paint_results:
+            return Solver.solver.paint_results[str((aura, color, num))]
         if isinstance(color, list):
             matching_locks = []
             for i1 in range(len(color[1])-1):
@@ -422,7 +420,7 @@ class LockpickState:
                         matching_locks.append((i1, i2))
             used = {str(color[1])}
             combos = [color[1][:]]
-            for c in self.solver.omega:
+            for c in Solver.solver.omega:
                 for i in range(len(color[1])):
                     for combo in combos[:]:
                         if combo[1] == c: continue
@@ -447,15 +445,15 @@ class LockpickState:
                         if any([cl in l[1] for l in combo]):
                             specials.append(cl)
                     doors.append([color[0], combo] + specials)
-                    for c in self.solver.omega:
+                    for c in Solver.solver.omega:
                         if color[0] == c: continue
                         doors.append([c, combo] + specials)
             #doors = doors
             result = [('Z' if 'Z' in str(d) else aura, d, num) for d in doors]
-            self.solver.paint_results[str((aura, color, num))] = result 
+            Solver.solver.paint_results[str((aura, color, num))] = result 
             return result
         doors = {color}
-        for c in self.solver.omega:
+        for c in Solver.solver.omega:
             for door in set(doors):
                 if door[0] != c and door[-1] != c:
                     doors.add(c+"/"+door[-1])
@@ -463,7 +461,7 @@ class LockpickState:
             doors.add(c)
         #doors = doors
         result = [('Z' if 'Z' in str(d) else aura, d, num) for d in doors] 
-        self.solver.paint_results[str((aura, color, num))] = result 
+        Solver.solver.paint_results[str((aura, color, num))] = result 
         return result
 
 pattern = r'([_!#@%&]*)((?:[A-WYZ]/)?(?:[a-hj-wyzA-WYZ$ω<>^]|[\[\{][^(\[\{)}]*[\]\}]))(-?\d*i?(?:[\+-]\d*i)?X-?\d+(?:[\+-]\d*i)?|-?xi?|-?\+|=?-?\*?\d*i?(?:[\+-]\d*i)?)'
@@ -477,7 +475,7 @@ def parse(level, target_moves=0, salvage_moves=0, salvage=None, salvage_id=None,
     state.max_stacks = max_stacks
     state.mult_max = mult_max
     state.special = special
-    state.previous = None
+    #state.previous = None
     state.passing_effect = passing_effect
     state.salvage = salvage
     state.salvage_id = salvage_id
@@ -595,14 +593,14 @@ class LockpickSolver(Solver):
                         next = s.unlock(i, back=a)
                         states += next
                     if s.gates:
-                        if len(s.edge(i)) == 0 and s.solver.edges[i][0 if a else 1] is not None:
+                        if len(s.edge(i)) == 0 and Solver.solver.edges[i][0 if a else 1] is not None:
                             s.access = set()
                             seq = s.edge(i)[:]
                             for g in s.gates:
                                 if a: seq.append(g)
                                 else: seq.insert(0, g)
                             s.edges[i] = Catalog.sadd(seq)
-                            s.add_access(s.solver.edges[i][0 if a else 1])
+                            s.add_access(Solver.solver.edges[i][0 if a else 1])
                         else:
                             for g in s.gates:
                                 mimic, locks, _ = Catalog.get(g)
@@ -745,7 +743,6 @@ class LockpickSolver(Solver):
         if self.passing_effect is not None:
             self.passing_effect = {i: len(state.edges[i][1]) for i in self.passing_effect}
         state = state.copy(0, 0)
-        state.solver = self
         state.access = {0}
         state.stock = Catalog.kadd({}, '{[]')
         state.last_move = 0
@@ -966,6 +963,6 @@ class LockpickSolver(Solver):
         return True
 
 if __name__ == "__main__":
-    #test(full=0, print_moves=0, salvages=0) #Time: ~113 sec0
-    LockpickSolver().solve(pomegaE, salvage=1, verbose=0, debug=0,
-                           use_ids=1, use_score=0, optimize_score=0)
+    test(full=0, print_moves=0, salvages=0) #Time: ~113 sec0
+    #LockpickSolver().solve(p32, salvage=1, verbose=0, debug=0,
+    #                       use_ids=1, use_score=0, optimize_score=0)
