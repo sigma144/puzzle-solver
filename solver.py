@@ -60,44 +60,49 @@ class Catalog:
         global _catalog
         return _catalog[num]
     @staticmethod
-    def pack(state):
+    def pack(state, dedup=0):
         grid = getattr(state, _catalog_variable)
-        array = [0]
-        for i, row in enumerate(grid):
-            array[0] <<= 1
-            if row == _array_default[i]:
-                array[0] += 1
-            else:
-                n = Catalog.tadd(row)
-                array.append(n)
+        if dedup:
+            array = [0]
+            for i, row in enumerate(grid):
+                array[0] <<= 1
+                if dedup and row == _array_default[i]:
+                    array[0] += 1
+                else:
+                    n = Catalog.tadd(row)
+                    array.append(n)
+        else: array = [Catalog.tadd(row) for row in grid]
         setattr(state, _catalog_variable, tuple(array))
         return
     @staticmethod
-    def unpack(state):
+    def unpack(state, dedup=0):
         array = getattr(state, _catalog_variable)
-        grid = []
-        read_bit = 1 << len(_array_default) - 1
-        j = 1
-        for i in range(len(_array_default)):
-            if (array[0] & read_bit):
-                grid.append(_array_default[i])
-            else:
-                grid.append(Catalog.get(array[j]))
-                j += 1
-            read_bit >>= 1
+        if dedup:
+            grid = []
+            read_bit = 1 << len(_array_default) - 1
+            j = 1
+            for i in range(len(_array_default)):
+                if (array[0] & read_bit):
+                    grid.append(_array_default[i])
+                else:
+                    grid.append(Catalog.get(array[j]))
+                    j += 1
+                read_bit >>= 1
+        else: grid = [Catalog.get(n) for n in array]
         setattr(state, _catalog_variable, grid)
         return array
 
 class Solver:
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
-    solver_instance = None
+    solver = None
     #Implement __hash__ and __eq__ for states
-    def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, catalog_variable=0, use_score=0, optimize_score=0, use_names=0, use_ids=0, **kwargs):
+    def solve_optimal(self, starting_state, debug=0, prnt=1, diff=1, diff_trail=0, showprogress=0, catalog_variable=None, use_score=0, optimize_score=0, use_names=0, use_ids=0, **kwargs):
         start_time = time.time()
-        Solver.solver_instance = self
+        Solver.solver = self
         self.kwargs = kwargs
         starting_state = self.setup(starting_state)
         starting_state.previous = None
+        self.purge_state_check(starting_state, 1) #Purge check testing
         print(starting_state)
         print("Solving...")
         if catalog_variable:
@@ -141,127 +146,156 @@ class Solver:
                     print("Score:", str(self.score_state(state)))
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             return move_list
-        while True:
-            count_iterate += 1
-            state = self._state_queue.popleft()
-            if catalog_variable:
-                catalog_array = Catalog.unpack(state)
-            if debug: print(state, "\n^ Current" + (': ' + state.name if use_names else '') + "\n")
-            if use_score and state._invalidate: next = []
-            else: next = self.get_next_states(state)
-            hint = 0
-            if debug:
+        try:
+            while True:
+                count_iterate += 1
+                state = self._state_queue.popleft()
+                if catalog_variable is not None:
+                    catalog_array = Catalog.unpack(state)
+                if debug: print(state, "\n^ Current" + (': ' + state.name if use_names else '') + "\n")
+                if use_score and state._invalidate: next = []
+                else: next = self.get_next_states(state)
+                hint = 0
+                if debug:
+                    for i, s in enumerate(next):
+                        s.previous = state
+                        print(s, "\n^ "+str(i+1)+ (': ' + s.name if use_names else '') + "\n")
+                    hint = input() or 0
+                    if hint: next = [next[min(int(hint) - 1, len(next) - 1)]]
                 for i, s in enumerate(next):
-                    print(s, "\n^ "+str(i+1)+ (': ' + s.name if use_names else '') + "\n")
-                hint = input() or 0
-                if hint: next = [next[min(int(hint) - 1, len(next) - 1)]]
-            for i, s in enumerate(next):
-                s.previous = state
-                if not self.check_state(s): continue
-                s._move_id = i + 1
-                if use_score:
-                    s._invalidate = False
-                    score = (self._moves + 1, self.score_state(s))
-                    if optimize_score: score = (score[1], score[0])
-                    if s in self._prev_states and not hint:
-                        s2, score2 = self._prev_states[s]
-                        if score < score2:
-                            self._prev_states.pop(s)
-                            s2._invalidate = True
-                        else: continue
-                    if self.check_finish(s):
-                        if best_score is None or score < best_score:
-                            best_score = score
-                            best_state = s
-                            self._next_queue = {k:v for k,v in self._next_queue.items() if k < best_score}
-                    self._prev_states[s] = (s, score)
-                    if best_score is not None and score >= best_score: continue
-                    if score not in self._next_queue: self._next_queue[score] = deque()
-                    self._next_queue[score].append(s)
-                    if score[0] == self._depth: depth_size += 1
-                else:
-                    if self.check_finish(s):
-                        return finish_solve(s)
-                    if catalog_variable:
-                        Catalog.pack(s)
-                    if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)) or hint:
-                        self._next_queue.append(s)
-            if count_iterate % 20000 == 0:
-                if showprogress:
-                    print(state)
-                    print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
-                if purge_countdown > 0:
-                    purge_countdown -= 1
-                memuse = psutil.virtual_memory()[2]
-                if memuse >= 95:
-                    if self.purge_state_check(state, purge_num) is None:
-                        print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
-                    elif purge_countdown == 0:
-                        setattr(state, catalog_variable, catalog_array)
-                        purge_num += 1
-                        print(Solver._red + "HIGH MEMORY USE, PURGING STATES (N=" + str(purge_num) + ")" + Solver._black)
-                        new_prev = set()
-                        while self._prev_states:
-                            s = self._prev_states.pop()
-                            array = Catalog.unpack(s)
-                            if (self.purge_state_check(s, purge_num)):
-                                setattr(s, catalog_variable, array)
-                                new_prev.add(s)
-                            else: setattr(s, catalog_variable, array)
-                        self._prev_states = new_prev
-                        new_queue = deque()
-                        while self._state_queue:
-                            s = self._state_queue.popleft()
-                            array = Catalog.unpack(s)
-                            if (self.purge_state_check(s, purge_num)):
-                                setattr(s, catalog_variable, array)
-                                new_queue.append(s)
-                            #else: setattr(s, catalog_variable, array)
-                        self._state_queue = new_queue
-                        new_queue = deque()
-                        while self._next_queue:
-                            s = self._next_queue.popleft()
-                            array = Catalog.unpack(s)
-                            if (self.purge_state_check(s, purge_num)):
-                                setattr(s, catalog_variable, array)
-                                new_queue.append(s)
-                            #else: setattr(s, catalog_variable, array)
-                        self._next_queue = new_queue
-                        purge_countdown = 10
-                        purge_history.append(self._depth)
-                        Catalog.unpack(state)
-            if len(self._state_queue) == 0:
-                #self._prev_states = set()
-                if use_score:
-                    self._next_queue.pop(self._score)
-                    if len(self._next_queue) == 0:
-                        if best_state is not None: return finish_solve(best_state)
-                        break
-                    score = min(self._next_queue)
-                    self._state_queue = self._next_queue[score]
-                    self._score = score
-                    if optimize_score: self._moves = score[1]
-                    else: self._moves = score[0]
-                    if score[0] == self._depth: continue
-                    self._depth = score[0]
-                    depth_size = 0
-                    for sc, que in self._next_queue.items():
-                        if sc[0] == self._depth: depth_size += len(que)
-                    depth_start = count_iterate
-                else:
-                    if len(self._next_queue) == 0: break
-                    self._state_queue = self._next_queue
-                    self._next_queue = deque()
-                    self._depth += 1
-                    depth_size = len(self._state_queue)
-                    depth_start = count_iterate
-                elapsed = time.time() - depth_time
-                time_diff = elapsed - depth_last
-                depth_last = elapsed
-                depth_time = time.time()
-                print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-            if catalog_variable:
-                setattr(state, catalog_variable, catalog_array)
+                    s.previous = state
+                    if not self.check_state(s): continue
+                    s._move_id = i + 1
+                    if use_score:
+                        s._invalidate = False
+                        score = (self._moves + 1, self.score_state(s))
+                        if optimize_score: score = (score[1], score[0])
+                        if s in self._prev_states and not hint:
+                            s2, score2 = self._prev_states[s]
+                            if score < score2:
+                                self._prev_states.pop(s)
+                                s2._invalidate = True
+                            else: continue
+                        if self.check_finish(s):
+                            if best_score is None or score < best_score:
+                                best_score = score
+                                best_state = s
+                                self._next_queue = {k:v for k,v in self._next_queue.items() if k < best_score}
+                        self._prev_states[s] = (s, score)
+                        if best_score is not None and score >= best_score: continue
+                        if score not in self._next_queue: self._next_queue[score] = deque()
+                        self._next_queue[score].append(s)
+                        if score[0] == self._depth: depth_size += 1
+                    else:
+                        if self.check_finish(s):
+                            return finish_solve(s)
+                        if catalog_variable is not None:
+                            Catalog.pack(s)
+                        if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)) or hint:
+                            self._next_queue.append(s)
+                if count_iterate % 20000 == 0:
+                    if showprogress:
+                        print(state)
+                        print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
+                    if purge_countdown > 0:
+                        purge_countdown -= 1
+                    memuse = psutil.virtual_memory()[2]
+                    if memuse >= 90:
+                        if self.purge_state_check(state, purge_num) is None:
+                            print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+                        elif purge_countdown == 0:
+                            if catalog_variable is None:
+                                purge_num += 1
+                                print(Solver._red + "HIGH MEMORY USE, PURGING STATES (N=" + str(purge_num) + ")" + Solver._black)
+                                new_prev = set()
+                                while self._prev_states:
+                                    s = self._prev_states.pop()
+                                    if (self.purge_state_check(s, purge_num)):
+                                        new_prev.add(s)
+                                self._prev_states = new_prev
+                                new_queue = deque()
+                                while self._state_queue:
+                                    s = self._state_queue.popleft()
+                                    if (self.purge_state_check(s, purge_num)):
+                                        new_queue.append(s)
+                                self._state_queue = new_queue
+                                new_queue = deque()
+                                while self._next_queue:
+                                    s = self._next_queue.popleft()
+                                    if (self.purge_state_check(s, purge_num)):
+                                        new_queue.append(s)
+                                self._next_queue = new_queue
+                                purge_countdown = 10
+                                purge_history.append(self._depth)
+                            else:
+                                setattr(state, catalog_variable, catalog_array)
+                                purge_num += 1
+                                print(Solver._red + "HIGH MEMORY USE, PURGING STATES (N=" + str(purge_num) + ")" + Solver._black)
+                                new_prev = set()
+                                while self._prev_states:
+                                    s = self._prev_states.pop()
+                                    array = Catalog.unpack(s)
+                                    if (self.purge_state_check(s, purge_num)):
+                                        setattr(s, catalog_variable, array)
+                                        new_prev.add(s)
+                                    else: setattr(s, catalog_variable, array)
+                                self._prev_states = new_prev
+                                new_queue = deque()
+                                while self._state_queue:
+                                    s = self._state_queue.popleft()
+                                    array = Catalog.unpack(s)
+                                    if (self.purge_state_check(s, purge_num)):
+                                        setattr(s, catalog_variable, array)
+                                        new_queue.append(s)
+                                self._state_queue = new_queue
+                                new_queue = deque()
+                                while self._next_queue:
+                                    s = self._next_queue.popleft()
+                                    array = Catalog.unpack(s)
+                                    if (self.purge_state_check(s, purge_num)):
+                                        setattr(s, catalog_variable, array)
+                                        new_queue.append(s)
+                                self._next_queue = new_queue
+                                purge_countdown = 10
+                                purge_history.append(self._depth)
+                                Catalog.unpack(state)
+                if len(self._state_queue) == 0:
+                    #self._prev_states = set()
+                    if use_score:
+                        self._next_queue.pop(self._score)
+                        if len(self._next_queue) == 0:
+                            if best_state is not None: return finish_solve(best_state)
+                            break
+                        score = min(self._next_queue)
+                        self._state_queue = self._next_queue[score]
+                        self._score = score
+                        if optimize_score: self._moves = score[1]
+                        else: self._moves = score[0]
+                        if score[0] == self._depth: continue
+                        self._depth = score[0]
+                        depth_size = 0
+                        for sc, que in self._next_queue.items():
+                            if sc[0] == self._depth: depth_size += len(que)
+                        depth_start = count_iterate
+                    else:
+                        if len(self._next_queue) == 0: break
+                        self._state_queue = self._next_queue
+                        self._next_queue = deque()
+                        self._depth += 1
+                        depth_size = len(self._state_queue)
+                        depth_start = count_iterate
+                    elapsed = time.time() - depth_time
+                    time_diff = elapsed - depth_last
+                    depth_last = elapsed
+                    depth_time = time.time()
+                    print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                if catalog_variable is not None:
+                    setattr(state, catalog_variable, catalog_array)
+        except Exception as e:
+            self.trace_moves(state, prnt, diff, diff_trail, use_names, use_ids, catalog_variable)
+            print("Exception thrown while solving!")
+            print(repr(e))
+            raise e
         print("No solution exists.")
         if best_state is not None:
             print("Best state", best_state)
