@@ -32,7 +32,6 @@ class Catalog:
     def pack(state):
         assert isinstance(state._grid[0], list)
         arr = [Catalog.tadd(row) for row in state._grid]
-        #state._grid = array.array('i', arr)
         state._grid = tuple(arr)
         return
     @staticmethod
@@ -45,27 +44,53 @@ class Catalog:
 
 class GridState:
     def __init__(self, grid):
-        #self.grid = array('i', grid)
         self._grid = grid[:]
+        self._track = {}
+        #self._temp = {}
     def __hash__(self):
         return hash(self._grid)
     def __eq__(self, state):
         return self._grid == state._grid
     def __repr__(self):
         assert isinstance(self._grid[0], int)
-        return '\n'.join([''.join(Catalog.get(row)) for row in self._grid])
+        return '\n'.join([''.join([s[0] for s in Catalog.get(row)]) for row in self._grid])
     def copy(self):
-        return GridState(self._grid)
+        state = GridState(self._grid)
+        state._track = self._track
+        return state
     def get(self, x, y):
+        if y < 0 or x < 0 or y >= len(self._grid) or x >= len(self._grid[y]):
+            return None
         return self._grid[y][x]
     def set(self, x, y, val):
         self._grid[y] = self._grid[y][:]
         self._grid[y][x] = val
+    def set_and_track(self, x, y, val):
+        self._grid[y] = self._grid[y][:]
+        self._grid[y][x] = val
+        self._track = self._track.copy()
+        self._track[val] = (x, y)
     def find(self, val):
         for y in range(len(self._grid)):
             for x in range(len(self._grid[y])):
                 if self._grid[y][x] == val:
                     return (x, y)
+    def find_and_track(self, val):
+        if val in self._track:
+            return self._track[val]
+        for y in range(len(self._grid)):
+            for x in range(len(self._grid[y])):
+                if self._grid[y][x] == val:
+                    self._track = self._track.copy()
+                    self._track[val] = (x, y)
+                    return (x, y)
+    def count(self, val):
+        total = 0
+        for y in range(len(self._grid)):
+            for x in range(len(self._grid[y])):
+                if self._grid[y][x] == val:
+                    total += 1
+        return total
 
 class Solver:
     def setup(self, puzzle): return puzzle #Override if initial setup is necessary
@@ -82,6 +107,7 @@ class Solver:
         starting_state = self.setup(puzzle)
         Catalog.pack(starting_state)
         starting_state.previous = None
+        starting_state._temp = {}
         print(starting_state)
         print("Solving...")
         self._prev_states = {starting_state}
@@ -126,7 +152,8 @@ class Solver:
                     state = self._state_queue.pop()
                     packed_array = Catalog.unpack(state)
                     next = self.get_next_states(state)
-                    for s in next:
+                    for _, s in next.items():
+                        #s.name = name
                         if state.previous is not None and s == state.previous: continue
                         s.previous = state
                         if self.check_finish(s):
@@ -136,7 +163,8 @@ class Solver:
                         if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
                             self._next_queue.append(s)
                     state._grid = packed_array
-                    del state.x; del state.y
+                    #del state._temp
+                    del state._track
                     if count_iterate % 20000 == 0:
                         print(state)
                         print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
@@ -144,6 +172,7 @@ class Solver:
                         if memuse >= 90:
                             print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
                     if len(self._state_queue) == 0:
+                        #self._prev_states = set()
                         if len(self._next_queue) == 0: break
                         self._state_queue = self._next_queue
                         self._next_queue = []
@@ -169,8 +198,7 @@ class Solver:
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
-    @staticmethod
-    def trace_moves(s, prnt=1, diff=1, diff_trail=0, use_names=0, use_ids=0):
+    def trace_moves(self, s, prnt=1, diff=1, diff_trail=0, use_names=1):
         Catalog.pack(s)
         move_list = [s]
         while s.previous is not None:
@@ -189,12 +217,21 @@ class Solver:
                         else: newstr += Solver._red+m2[i2]+Solver._black
                     if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
                     if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
+                    print()
                     print(newstr)
-            elif use_names and move_list:
-                print(', '.join([m.name for m in move_list[1:]]))
             else:
                 for m in move_list: print(m)
-        if use_ids: print(' '.join([str(m._move_id) for m in move_list[1:]]))
+        if use_names and move_list:
+            for m in move_list:
+                Catalog.unpack(m)
+                m._track = {}
+            names = []
+            for m in move_list[1:]:
+                states = self.get_next_states(m.previous)
+                for k,v in states.items():
+                    if v == m:
+                        names.append(k)
+            print(' '.join(names))
         return move_list
     def open_gui(self, puzzle): #TODO
         pygame.init()
@@ -246,7 +283,7 @@ class Vec3:
 
 DLEFT = Vec3(-1, 0, 0); DRIGHT = Vec3(1, 0, 0); DUP = Vec3(0, -1, 0); DDOWN = Vec3(0, 1, 0)
 DBELOW = Vec3(0, 0, -1); DABOVE = Vec3(0, 0, 1); DZERO = Vec3(0, 0, 0)
-DIRECTIONS = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+DIRECTIONS = {'>':(1, 0), 'v':(0, 1), '<':(-1, 0), '^':(0, -1)}
 DIRECTIONS3D = [DLEFT, DRIGHT, DUP, DDOWN]
 DIRECTIONS8 = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 DIRECTIONS8_HALF = [(-1, 0), (-1, -1), (0, -1), (1, -1)]
