@@ -50,6 +50,7 @@ class GridState:
         self._vars = {}
         self._track = {}
         self._temp = {}
+        self._score = 1
     def __hash__(self):
         if self._vars:
             return hash(self._grid) ^ hash(pickle.dumps(self._vars))
@@ -187,78 +188,94 @@ class Solver:
         depth_last = 0
         depth_size = 0
         depth_start = 0
-        self._solving = True
+        least_score = 0
+        least_changes = 0
+        best_state = None
+        if optimize_score:
+            use_score = True
         def finish_solve(state):
             elapsed = time.time() - start_time
-            move_list = self.trace_moves(state)
+            move_list, move_names = self.trace_moves(state)
+            score = sum([s._score for s in move_list[1:]])
             if optimize_score:
-                print("Solved with score", str(sum([s._score for s in move_list[1:]]))+"!")
+                print("Solved with score", str(score)+"!")
                 print("Moves:", len(move_list)-1)
             else:
                 print("Solved in", len(move_list)-1, "moves!")
-                if self.score_state(state) is not None:
-                    print("Score:", str(self.score_state(state)))
+                if use_score:
+                    print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             return move_list
         try:
-            if use_score:
-                pass
-            else:
-                while self._solving:
-                    count_iterate += 1
-                    state = self._state_queue.pop()
-                    packed_array = Catalog.unpack(state)
-                    next = self.get_next_states(state)
-                    for _, s in next.items():
-                        s.previous = state
-                        if self.check_finish(s):
-                            state._grid = packed_array
+            while True:
+                count_iterate += 1
+                state = self._state_queue.pop()
+                packed_array = Catalog.unpack(state)
+                next = self.get_next_states(state)
+                state._grid = packed_array
+                for _, s in next.items():
+                    s.previous = state
+                    finished = self.check_finish(s)
+                    Catalog.pack(s)
+                    if finished:
+                        if not use_score:
                             del state._temp, state._track
                             del s._temp, s._track
                             return finish_solve(s)
-                        Catalog.pack(s)
-                        if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
-                            if optimize_score:
-                                self._next_queue.setdefault(self._depth + s._score, deque()).appendleft(s)
-                                del s._score
-                            else:
-                                self._next_queue.setdefault(self._depth + 1, deque()).appendleft(s)
-                    state._grid = packed_array
-                    if count_iterate % 50000 == 0:
-                        memuse = int(psutil.virtual_memory()[2])
-                        print(state)
-                        print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + f', RAM {memuse}%,' + (", catalog size " + str(len(_catalog)) if _catalog else ""))
-                        if memuse >= 90:
-                            print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
-                    if len(self._state_queue) == 0:
-                        #self._prev_states = set()
-                        if len(self._next_queue) == 0: break
-                        min_score = min(self._next_queue.keys())
-                        self._state_queue = self._next_queue[min_score]
-                        del self._next_queue[min_score]
-                        self._depth = min_score
-                        depth_size = len(self._state_queue)
-                        depth_start = count_iterate
-                        elapsed = time.time() - depth_time
-                        time_diff = elapsed - depth_last
-                        depth_last = elapsed
-                        depth_time = time.time()
-                        print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-                    del state._temp, state._track, state._readonly
+                        move_list, move_names = self.trace_moves(s, prnt=False)
+                        changes = len([m for i,m in enumerate(move_names[1:]) if m != move_names[i]])
+                        if optimize_score:
+                            score = len(move_list) - 1
+                        else:
+                            score = sum([s._score for s in move_list[1:]])
+                        if best_state is None or score < least_score \
+                            or score == least_score and changes < least_changes:
+                            least_score = score
+                            least_changes = changes
+                            best_state = s
+                    if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
+                        if optimize_score:
+                            self._next_queue.setdefault(self._depth + s._score, deque()).appendleft(s)
+                        else:
+                            self._next_queue.setdefault(self._depth + 1, deque()).appendleft(s)
+                        del s._score
+                if count_iterate % 50000 == 0:
+                    memuse = int(psutil.virtual_memory()[2])
+                    print(state)
+                    print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(_catalog)) if _catalog else "")
+                    if memuse >= 90:
+                        print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
+                if len(self._state_queue) == 0:
+                    #self._prev_states = set()
+                    if best_state is not None:
+                        return finish_solve(best_state)
+                    if len(self._next_queue) == 0: break
+                    least_score = min(self._next_queue.keys())
+                    self._state_queue = self._next_queue[least_score]
+                    del self._next_queue[least_score]
+                    self._depth = least_score
+                    depth_size = len(self._state_queue)
+                    depth_start = count_iterate
+                    elapsed = time.time() - depth_time
+                    time_diff = elapsed - depth_last
+                    depth_last = elapsed
+                    depth_time = time.time()
+                    print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                del state._temp, state._track, state._readonly
         except Exception as e:
-            self.trace_moves(state)
+            try:
+                Catalog.pack(state)
+                self.trace_moves(state)
+            except:
+                print('<Tracing moves failed>')
             print("Exception thrown while solving!")
             print(repr(e))
             raise e
-        if self._solving:
-            print("No solution exists.")
-        else:
-            print("Solve terminated.")
+        print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
     def trace_moves(self, s, prnt=1, diff=1, diff_trail=0):
-        Catalog.pack(s)
         move_list = [s]
         while s.previous is not None:
             move_list.insert(0, s.previous)
@@ -281,8 +298,9 @@ class Solver:
             else:
                 for m in move_list: print(m)
         if move_list:
+            packed_arrays = []
             for m in move_list:
-                Catalog.unpack(m)
+                packed_arrays.append(Catalog.unpack(m))
                 m._track = {}
                 m._temp = {}
             names = []
@@ -297,9 +315,11 @@ class Solver:
                 else:
                     print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
                     break
-            print(' '.join(names))
+            if prnt: print(' '.join(names))
+            for i, m in enumerate(move_list):
+                m._grid = packed_arrays[i]
             move_list = new_list
-        return move_list
+        return move_list, names
     def debug(self):
         moves = []
         state = self.setup(self._puzzle)
