@@ -28,6 +28,7 @@ class AbridgeSolver(Solver):
                 continue
             new_state = state.copy()
             new_state.set_var('move', p)
+            new_state.set_score(0)
             states[p] = new_state
         if move is None:
             return states
@@ -283,22 +284,18 @@ puzzle_test = [
 ]
 
 puzzle_x = from_strs([
-'###',
-'# #',
-'#*#',
-'# #',
-'#^#',
-'###',
+'#########',
+'# #######',
+'# #######',
+'#      <#',
+'#     v<#',
+'# > #  <#',
+'#   # ^ #',
+'#*  #^  #',
+'#########',
 ])
 
-#import cProfile
-#import pstats
-#profiler = cProfile.Profile()
-#profiler.enable()
-AbridgeSolver().solve_optimal(puzzle_x, debug=1)
-#profiler.disable()
-#stats = pstats.Stats(profiler)
-#stats.sort_stats('cumulative').print_stats(10)  # Print top 10 stats
+AbridgeSolver().solve_optimal(puzzle_x, debug=0, use_score=1, optimize_score=1)
 
 puzzle_blank = from_strs([
 '#######',

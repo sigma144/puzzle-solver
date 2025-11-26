@@ -20,7 +20,6 @@ class SokobanSolver(Solver):
                 new_state.set(x2, y2, 'P')
                 new_state.x, new_state.y = x2, y2
                 new_state.set(x, y, ' ')
-                new_state.set_score(1)
                 next[dir] = new_state
                 if state.get(x-dx, y-dy) == 'O':
                     new_state = new_state.copy()
@@ -158,13 +157,6 @@ puzzle, target = convert([
 ])
 '''
 
-#import cProfile
-#import pstats
-#profiler = cProfile.Profile()
-#profiler.enable()
-#SokobanSolver().solve_optimal([testp, testt])
-SokobanSolver().solve_optimal([puzzlex11, targetx11], optimize_score=1)
-#SokobanSolver().solve_optimal([puzzle, target])
-#profiler.disable()
-#stats = pstats.Stats(profiler)
-#stats.sort_stats('cumulative').print_stats(10)  # Print top 10 stats
+#SokobanSolver().solve_optimal([testp, testt], use_score=1, optimize_score=0)
+#SokobanSolver().solve_optimal([puzzlex11, targetx11], use_score=1, optimize_score=1)
+SokobanSolver().solve_optimal([puzzle, target], optimize_score=0)
