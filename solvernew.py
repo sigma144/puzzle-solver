@@ -1,4 +1,4 @@
-import time, psutil, pygame, threading, sys
+import time, psutil, pickle
 from dataclasses import dataclass
 
 _catalog = _used = None
@@ -40,37 +40,73 @@ class Catalog:
         array = state._grid
         grid = [Catalog.get(n) for n in array]
         state._grid = grid
+        state._readonly = True
         return array
 
 class GridState:
     def __init__(self, grid):
-        self._grid = grid[:]
+        self._grid = grid.copy()
+        self._vars = {}
         self._track = {}
-        #self._temp = {}
+        self._temp = {}
     def __hash__(self):
+        if self._vars:
+            return hash(self._grid) ^ hash(pickle.dumps(self._vars))
         return hash(self._grid)
     def __eq__(self, state):
-        return self._grid == state._grid
+        return self._grid == state._grid and self._vars == state._vars
     def __repr__(self):
         assert isinstance(self._grid[0], int)
-        return '\n'.join([''.join([s[0] for s in Catalog.get(row)]) for row in self._grid])
+        s = '\n'.join([''.join([s[0] for s in Catalog.get(row)]) for row in self._grid])
+        if self._vars:
+            s += '\nVars: ' + str(self._vars)
+        if hasattr(self, '_temp') and self._temp:
+            s += '\nTemp: ' + str(self._temp)
+        return s
     def copy(self):
         state = GridState(self._grid)
+        state._vars = self._vars
         state._track = self._track
+        state._temp = self._temp
         return state
     def get(self, x, y):
         if y < 0 or x < 0 or y >= len(self._grid) or x >= len(self._grid[y]):
             return None
         return self._grid[y][x]
     def set(self, x, y, val):
-        self._grid[y] = self._grid[y][:]
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._grid[y] = self._grid[y].copy()
         self._grid[y][x] = val
     def set_and_track(self, x, y, val):
-        self._grid[y] = self._grid[y][:]
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._grid[y] = self._grid[y].copy()
         self._grid[y][x] = val
         self._track = self._track.copy()
         self._track[val] = (x, y)
-    def find(self, val):
+    def size(self):
+        return len(self._grid[0]), len(self._grid)
+    def all_points(self):
+        class Gen:
+            def __init__(s):
+                s.x = 0; s.y = 0
+                s.width = len(self._grid[0])
+                s.height = len(self._grid)
+            def __iter__(s):
+                while True:
+                    yield (s.x, s.y)
+                    s.x += 1
+                    if s.x >= s.width:
+                        s.x = 0
+                        s.y += 1
+                        if s.y >= s.height:
+                            break
+        return Gen()
+    def find(self, val, index=None):
+        if index is not None:
+            for y in range(len(self._grid)):
+                for x in range(len(self._grid[y])):
+                    if self._grid[y][x][index] == val:
+                        return (x, y)
         for y in range(len(self._grid)):
             for x in range(len(self._grid[y])):
                 if self._grid[y][x] == val:
@@ -91,10 +127,37 @@ class GridState:
                 if self._grid[y][x] == val:
                     total += 1
         return total
+    def get_var(self, var):
+        return self._vars.get(var)
+    def set_var(self, var, val):
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._vars = self._vars.copy()
+        self._vars[var] = val
+    def inc_var(self, var, num=1):
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._vars = self._vars.copy()
+        self._vars[var] += num
+    def dec_var(self, var, num=1):
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._vars = self._vars.copy()
+        self._vars[var] -= num
+    def get_temp(self, var):
+        return self._temp.get(var)
+    def set_temp(self, var, val):
+        self._temp = self._temp.copy()
+        self._temp[var] = val
+    def inc_temp(self, var, num=1):
+        if var not in self._temp: return
+        self._temp = self._temp.copy()
+        self._temp[var] += num
+    def dec_temp(self, var, num=1):
+        if var not in self._temp: return
+        self._temp = self._temp.copy()
+        self._temp[var] -= num
 
 class Solver:
     def setup(self, puzzle): return puzzle #Override if initial setup is necessary
-    def get_next_states(self, state): return [] #Must override
+    def get_next_states(self, state): return {} #Must override
     def check_finish(self, state): return False #Must override
     def score_state(self, state): return None #Optimize value other than move count
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
@@ -104,10 +167,12 @@ class Solver:
         Catalog.init()
         Solver.solver = self
         self.kwargs = kwargs
+        self._puzzle = puzzle
+        if debug:
+            return self.debug()
         starting_state = self.setup(puzzle)
-        Catalog.pack(starting_state)
         starting_state.previous = None
-        starting_state._temp = {}
+        Catalog.pack(starting_state)
         print(starting_state)
         print("Solving...")
         self._prev_states = {starting_state}
@@ -153,19 +218,17 @@ class Solver:
                     packed_array = Catalog.unpack(state)
                     next = self.get_next_states(state)
                     for _, s in next.items():
-                        #s.name = name
-                        if state.previous is not None and s == state.previous: continue
                         s.previous = state
                         if self.check_finish(s):
                             state._grid = packed_array
+                            del state._temp, state._track
+                            del s._temp, s._track
                             return finish_solve(s)
                         Catalog.pack(s)
                         if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
                             self._next_queue.append(s)
                     state._grid = packed_array
-                    #del state._temp
-                    del state._track
-                    if count_iterate % 20000 == 0:
+                    if count_iterate % 50000 == 0:
                         print(state)
                         print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
                         memuse = psutil.virtual_memory()[2]
@@ -184,6 +247,7 @@ class Solver:
                         depth_last = elapsed
                         depth_time = time.time()
                         print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time)+"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red)+'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                    del state._temp, state._track, state._readonly
         except Exception as e:
             self.trace_moves(state)
             print("Exception thrown while solving!")
@@ -225,29 +289,51 @@ class Solver:
             for m in move_list:
                 Catalog.unpack(m)
                 m._track = {}
+                m._temp = {}
             names = []
+            state = self.setup(self._puzzle)
             for m in move_list[1:]:
-                states = self.get_next_states(m.previous)
+                states = self.get_next_states(state)
                 for k,v in states.items():
                     if v == m:
-                        names.append(k)
+                        names.append(str(k))
+                        state = v
+                        break
+                else:
+                    print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
+                    break
             print(' '.join(names))
         return move_list
-    def open_gui(self, puzzle): #TODO
-        pygame.init()
-        screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption("Solver")
-        clock = pygame.time.Clock()
-        thread = threading.Thread(target=self.solve_optimal, args=(puzzle, 2))
-        thread.start()
+    def debug(self):
+        moves = []
+        state = self.setup(self._puzzle)
+        state.previous = None
         while True:
-            clock.tick(30)
-            screen.fill((0, 0, 0))
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self._solving = False
-                    pygame.quit()
-                    return
+            if self.check_finish(state): states = {}
+            else: states = self.get_next_states(state)
+            Catalog.pack(state)
+            states = {str(k):v for k,v in states.items()}
+            for k,v in states.items():
+                #print(k)
+                Catalog.pack(v)
+                v.previous = state
+                #print(v)
+                #print()
+            print(state)
+            if moves: print('Moves: ' + ' '.join(moves))
+            if self.check_finish(state):
+                print(Solver._green + f'Puzzle solved in {len(moves)} moves!' + Solver._black)
+            move = None
+            while move not in states:
+                move = input(' '.join(states.keys()) + ': ')
+                if not move and state.previous is not None:
+                    state = state.previous
+                    moves.pop()
+                    break
+            if move:
+                moves.append(move)
+                state = states[move]
+            Catalog.unpack(state)
     
 @dataclass
 class Vec2:
