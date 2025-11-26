@@ -1,5 +1,6 @@
 import time, psutil, pickle
 from dataclasses import dataclass
+from collections import deque
 
 _catalog = _used = None
 class Catalog:
@@ -154,6 +155,8 @@ class GridState:
         if var not in self._temp: return
         self._temp = self._temp.copy()
         self._temp[var] -= num
+    def set_score(self, val):
+        self._score = val
 
 class Solver:
     def setup(self, puzzle): return puzzle #Override if initial setup is necessary
@@ -177,30 +180,19 @@ class Solver:
         print("Solving...")
         self._prev_states = {starting_state}
         self._state_queue = [starting_state]
-        self._next_queue = []
+        self._next_queue = {}
         self._depth = 0
-        self._score = 0
-        best_score = None
-        best_state = None
         count_iterate = 0
         depth_time = time.time()
         depth_last = 0
         depth_size = 0
         depth_start = 0
         self._solving = True
-        if use_score or optimize_score: #Check
-            use_score = True
-            starting_state._invalidate = False
-            score = (0, self.score_state(starting_state))
-            if optimize_score: score = (score[1], score[0])
-            self._prev_states = {starting_state: (starting_state, score)}
-            self._next_queue = {score: self._state_queue}
-            self._score = score
         def finish_solve(state):
             elapsed = time.time() - start_time
             move_list = self.trace_moves(state)
             if optimize_score:
-                print("Solved with score", str(self.score_state(state))+"!")
+                print("Solved with score", str(sum([s._score for s in move_list[1:]]))+"!")
                 print("Moves:", len(move_list)-1)
             else:
                 print("Solved in", len(move_list)-1, "moves!")
@@ -226,20 +218,25 @@ class Solver:
                             return finish_solve(s)
                         Catalog.pack(s)
                         if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
-                            self._next_queue.append(s)
+                            if optimize_score:
+                                self._next_queue.setdefault(self._depth + s._score, deque()).appendleft(s)
+                                del s._score
+                            else:
+                                self._next_queue.setdefault(self._depth + 1, deque()).appendleft(s)
                     state._grid = packed_array
                     if count_iterate % 50000 == 0:
+                        memuse = int(psutil.virtual_memory()[2])
                         print(state)
-                        print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + (", catalog size " + str(len(_catalog)) if _catalog else ""))
-                        memuse = psutil.virtual_memory()[2]
+                        print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + f', RAM {memuse}%,' + (", catalog size " + str(len(_catalog)) if _catalog else ""))
                         if memuse >= 90:
                             print(Solver._red + "HIGH MEMORY USE, PERFORMANCE MAY BE SLOW" + Solver._black)
                     if len(self._state_queue) == 0:
                         #self._prev_states = set()
                         if len(self._next_queue) == 0: break
-                        self._state_queue = self._next_queue
-                        self._next_queue = []
-                        self._depth += 1
+                        min_score = min(self._next_queue.keys())
+                        self._state_queue = self._next_queue[min_score]
+                        del self._next_queue[min_score]
+                        self._depth = min_score
                         depth_size = len(self._state_queue)
                         depth_start = count_iterate
                         elapsed = time.time() - depth_time
@@ -257,12 +254,10 @@ class Solver:
             print("No solution exists.")
         else:
             print("Solve terminated.")
-        if best_state is not None:
-            print("Best state", best_state)
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
-    def trace_moves(self, s, prnt=1, diff=1, diff_trail=0, use_names=1):
+    def trace_moves(self, s, prnt=1, diff=1, diff_trail=0):
         Catalog.pack(s)
         move_list = [s]
         while s.previous is not None:
@@ -285,24 +280,25 @@ class Solver:
                     print(newstr)
             else:
                 for m in move_list: print(m)
-        if use_names and move_list:
+        if move_list:
             for m in move_list:
                 Catalog.unpack(m)
                 m._track = {}
                 m._temp = {}
             names = []
-            state = self.setup(self._puzzle)
+            new_list = [self.setup(self._puzzle)]
             for m in move_list[1:]:
-                states = self.get_next_states(state)
+                states = self.get_next_states(new_list[-1])
                 for k,v in states.items():
                     if v == m:
                         names.append(str(k))
-                        state = v
+                        new_list.append(v)
                         break
                 else:
                     print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
                     break
             print(' '.join(names))
+            move_list = new_list
         return move_list
     def debug(self):
         moves = []
@@ -314,11 +310,8 @@ class Solver:
             Catalog.pack(state)
             states = {str(k):v for k,v in states.items()}
             for k,v in states.items():
-                #print(k)
                 Catalog.pack(v)
                 v.previous = state
-                #print(v)
-                #print()
             print(state)
             if moves: print('Moves: ' + ' '.join(moves))
             if self.check_finish(state):
