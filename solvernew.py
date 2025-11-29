@@ -211,33 +211,35 @@ class Solver:
                 while True:
                     count_iterate += 1
                     state = self._state_queue.pop()
-                    if state._score is None: #State already checked at a lower depth
-                        continue
-                    #del state._score
-                    packed_array = Catalog.unpack(state)
-                    if self.check_finish(state):
-                        del state._temp, state._track
-                        return finish_solve(state)
-                    next = self.get_next_states(state)
-                    state._grid = packed_array
-                    for _, s in next.items():
-                        s.previous = state
-                        Catalog.pack(s)
-                        if optimize_score:
-                            score = (self._depth[0] + s._score, self._depth[1] + 1)
-                        else:
-                            score = (self._depth[0] + 1, self._depth[1] + s._score)
-                        s._score = score
-                        if self._prev_states.setdefault(s, s) is s:
-                            self._next_queue.setdefault(score, deque()).appendleft(s)
-                        elif score < self._prev_states[s]._score:
-                            self._prev_states[s]._score = None
-                            self._prev_states[s] = s
-                            self._next_queue.setdefault(s._score, deque()).appendleft(s)
-                    if count_iterate % 50000 == 0:
-                        memuse = int(psutil.virtual_memory()[2])
-                        print(state)
-                        print("Depth "+str(self._depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(_catalog)) if _catalog else "")
+                    if state._score is not None:
+                        del state._score
+                        packed_array = Catalog.unpack(state)
+                        if self.check_finish(state):
+                            del state._temp, state._track
+                            return finish_solve(state)
+                        next = self.get_next_states(state)
+                        state._grid = packed_array
+                        for _, s in next.items():
+                            s.previous = state
+                            Catalog.pack(s)
+                            if optimize_score:
+                                score = (self._depth[0] + s._score, self._depth[1] + 1)
+                            else:
+                                score = (self._depth[0] + 1, self._depth[1] + s._score)
+                            s._score = score
+                            if self._prev_states.setdefault(s, s) is s:
+                                self._next_queue.setdefault(score, deque()).appendleft(s)
+                            else:
+                                existing_state = self._prev_states[s]
+                                if score < getattr(existing_state, '_score', (-1, -1)):
+                                    existing_state._score = None
+                                    self._prev_states[s] = s
+                                    self._next_queue.setdefault(score, deque()).appendleft(s)
+                        if count_iterate % 50000 == 0:
+                            memuse = int(psutil.virtual_memory()[2])
+                            print(state)
+                            print("Depth "+str(self._depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(_catalog)) if _catalog else "")
+                        del state._temp, state._track, state._readonly
                     if len(self._state_queue) == 0:
                         #self._prev_states = set()
                         del self._next_queue[self._depth]
@@ -256,7 +258,6 @@ class Solver:
                                 +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                                 +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
                         self._depth = least_score
-                    del state._temp, state._track, state._readonly
             else:
                 self._prev_states = {starting_state}   
                 self._state_queue = [starting_state]
@@ -282,6 +283,7 @@ class Solver:
                         memuse = int(psutil.virtual_memory()[2])
                         print(state)
                         print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(_catalog)) if _catalog else "")
+                    del state._temp, state._track, state._readonly
                     if len(self._state_queue) == 0:
                         #self._prev_states = set()
                         if len(self._next_queue) == 0: break #No solution found
@@ -297,7 +299,6 @@ class Solver:
                         print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
                             +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                             +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-                    del state._temp, state._track, state._readonly
         except Exception as e:
             try:
                 Catalog.pack(state)
