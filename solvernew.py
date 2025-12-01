@@ -185,18 +185,20 @@ class Solver:
         def finish_solve(state):
             state.pack()
             elapsed = time.time() - start_time
-            move_list, _ = self.trace_moves(state)
-            score = sum([s._score for s in move_list[1:]])
+            moves, names = self.trace_moves(state)
+            print(' '.join(names))
+            score = sum([s._score for s in moves[1:]])
             if optimize_score:
                 print("Solved with score", str(score)+"!")
-                print("Moves:", len(move_list)-1)
+                print("Moves:", len(moves)-1)
             else:
-                print("Solved in", len(move_list)-1, "moves!")
+                print("Solved in", len(moves)-1, "moves!")
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+            self.replay_moves(moves)
             del self._prev_states, self._state_queue, self._next_queue
-            return move_list
+            return moves
         try:
             if use_score:
                 self._prev_states = {starting_state: starting_state}
@@ -307,7 +309,9 @@ class Solver:
         except Exception as e:
             try:
                 Catalog.pack(state)
-                self.trace_moves(state)
+                _, names = self.trace_moves(state)
+                print(state)
+                print(' '.join(names))
             except:
                 print('<Tracing moves failed>')
             print("Exception thrown while solving!")
@@ -317,36 +321,19 @@ class Solver:
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
         return []
-    def trace_moves(self, s, prnt=1, diff=1, diff_trail=0):
-        move_list = [s]
+    def trace_moves(self, s):
+        moves = [s]
         while s.previous is not None:
-            move_list.insert(0, s.previous)
+            moves.insert(0, s.previous)
             s = s.previous
-        if prnt:
-            if diff:
-                strs = [str(m) for m in move_list]
-                print(strs[0])
-                for i, m2 in enumerate(strs[1:]):
-                    newstr = ""
-                    m1 = strs[i]
-                    for i2 in range(min(len(m1), len(m2))):
-                        if m1[i2] == m2[i2]: newstr += m1[i2]
-                        elif m2[i2] == ' ' and diff_trail: newstr += Solver._red+m1[i2]+Solver._black
-                        else: newstr += Solver._red+m2[i2]+Solver._black
-                    if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
-                    if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
-                    print()
-                    print(newstr)
-            else:
-                for m in move_list: print(m)
-        if move_list:
-            for m in move_list:
+        names = []
+        if moves:
+            for m in moves:
                 m.unpack()
                 m._track = {}
                 m._temp = {}
-            names = []
             new_list = [self.setup(self._puzzle)]
-            for m in move_list[1:]:
+            for m in moves[1:]:
                 states = self.get_next_states(new_list[-1])
                 for k,v in states.items():
                     if v == m:
@@ -356,12 +343,32 @@ class Solver:
                 else:
                     print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
                     break
-            if prnt: print(' '.join(names))
-            for m in move_list:
+            for m in moves:
                 m.repack()
-            move_list = new_list
-        return move_list, names
-
+            moves = new_list
+            for m in moves:
+                m.pack()
+                del m._temp, m._track
+        return moves, names
+    def replay_moves(self, moves, diff=1, diff_trail=0):
+        if not diff:
+            for m, _ in moves:
+                print(m)
+                input()
+            return
+        strs = [str(m) for m in moves]
+        print(strs[0])
+        for i, m2 in enumerate(strs[1:]):
+            newstr = ""
+            m1 = strs[i]
+            for i2 in range(min(len(m1), len(m2))):
+                if m1[i2] == m2[i2]: newstr += m1[i2]
+                elif m2[i2] == ' ' and diff_trail: newstr += Solver._red+m1[i2]+Solver._black
+                else: newstr += Solver._red+m2[i2]+Solver._black
+            if len(m1) > len(m2) and diff_trail: newstr += Solver._blue+m1[len(m2):]+Solver._black
+            if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
+            input()
+            print(newstr)
     def debug(self):
         prev_moves = []
         state = self.setup(self._puzzle)
@@ -376,10 +383,14 @@ class Solver:
             for v in moves.values():
                 v.pack()
                 v.previous = state
-            print(state)
-            if prev_moves: print('Moves: ' + ' '.join(prev_moves))
+            if not move_input:
+                print(state)
+                if prev_moves: print('Moves: ' + ' '.join(prev_moves))
             if finished:
                 print(Solver._green + f'Puzzle solved in {len(prev_moves)} moves!' + Solver._black)
+                moves, _ = self.trace_moves(state)
+                self.replay_moves(moves)
+                return
             move = None
             while move not in moves:
                 if not move_input:
@@ -394,7 +405,9 @@ class Solver:
                         move = m
                         move_input = move_input[len(move)+1:]
                         break
-                else: move_input = None
+                else:
+                    move_input = None
+                    break
             if move:
                 prev_moves.append(move)
                 state = moves[move]
