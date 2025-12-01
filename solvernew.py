@@ -6,9 +6,8 @@ class Catalog:
     catalog = used = None
     level = 0
     @staticmethod
-    def init(lvl=1):
+    def init():
         Catalog.catalog = [None]; Catalog.used = {}
-        Catalog.set_compression_level(lvl)
     @staticmethod
     def add(val):
         if val in Catalog.used:
@@ -27,61 +26,6 @@ class Catalog:
     @staticmethod
     def get(num):
         return Catalog.catalog[num]
-    @staticmethod
-    def pack0(state):
-        state._grid = tuple(tuple(row) for row in state._grid)
-    @staticmethod
-    def unpack0(state):
-        array = state._grid
-        state._grid = list(list(row) for row in state._grid)
-        state._readonly = True
-        return array
-    @staticmethod
-    def pack1(state):
-        arr = [Catalog.tadd(row) for row in state._grid]
-        state._grid = tuple(arr)
-        return
-    @staticmethod
-    def unpack1(state):
-        array = state._grid
-        grid = [Catalog.get(n) for n in array]
-        state._grid = grid
-        state._readonly = True
-        return array
-    @staticmethod
-    def pack2(state):
-        num = 0
-        for row in state._grid[::-1]:
-            num <<= 16
-            num |= Catalog.tadd(row)
-        state._grid = num
-        return
-    @staticmethod
-    def unpack2(state):
-        array = state._grid
-        grid = []
-        while state._grid:
-            grid.append(Catalog.get(state._grid & 0xFFFF))
-            state._grid >>= 16
-        state._grid = grid
-        state._readonly = True
-        return array
-    @staticmethod
-    def pack(state): pass
-    @staticmethod
-    def unpack(state): pass
-    @staticmethod
-    def set_compression_level(lvl):
-        Catalog.level = lvl
-        if lvl == 0:
-            Catalog.pack = Catalog.pack0
-            Catalog.unpack = Catalog.unpack0
-        elif lvl == 1:
-            Catalog.pack = Catalog.pack1
-            Catalog.unpack = Catalog.unpack1
-        elif lvl == 2:
-            Catalog.pack = Catalog.pack2
-            Catalog.unpack = Catalog.unpack2
 
 class GridState:
     def __init__(self, grid):
@@ -97,20 +41,31 @@ class GridState:
     def __eq__(self, state):
         return self._grid == state._grid and self._vars == state._vars
     def __repr__(self):
-        array = Catalog.unpack(self)
-        s = '\n'.join([''.join([s[0] for s in row]) for row in self._grid])
+        s = '\n'.join([''.join([s[0] for s in Catalog.get(row)]) for row in self._grid])
         if self._vars:
             s += '\nVars: ' + str(self._vars)
         if hasattr(self, '_temp') and self._temp:
             s += '\nTemp: ' + str(self._temp)
-        self._grid = array
         return s
     def copy(self):
-        state = GridState(self._grid)
+        state = GridState.__new__(GridState)
+        state._grid = self._grid.copy()
         state._vars = self._vars
         state._track = self._track
         state._temp = self._temp
+        state._score = 1
         return state
+    def pack(self):
+        arr = [Catalog.tadd(row) for row in self._grid]
+        self._grid = tuple(arr)
+    def unpack(self):
+        self._packed = self._grid
+        grid = [Catalog.get(n) for n in self._grid]
+        self._grid = grid
+        self._readonly = True
+    def repack(self):
+        self._grid = self._packed
+        del self._packed
     def get(self, x, y):
         if y < 0 or x < 0 or y >= len(self._grid) or x >= len(self._grid[y]):
             return None
@@ -206,9 +161,9 @@ class Solver:
     def lower_bound(self, state): return 0 #(Optional) Minimum moves to solve
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver = None
-    def solve_optimal(self, puzzle, debug=0, use_score=0, optimize_score=0, max_depth=0, compression=1, **kwargs):
+    def solve_optimal(self, puzzle, debug=0, use_score=0, optimize_score=0, max_depth=0, **kwargs):
         start_time = time.time()
-        Catalog.init(compression)
+        Catalog.init()
         Solver.solver = self
         self.kwargs = kwargs
         self._puzzle = puzzle
@@ -218,7 +173,7 @@ class Solver:
             return self.debug()
         starting_state = self.setup(puzzle)
         starting_state.previous = None
-        Catalog.pack(starting_state)
+        starting_state.pack()
         print(starting_state)
         print("Solving...")
         count_iterate = 0
@@ -228,7 +183,7 @@ class Solver:
         depth_start = 0
         if max_depth == 0: max_depth = 999999999
         def finish_solve(state):
-            Catalog.pack(state)
+            state.pack()
             elapsed = time.time() - start_time
             move_list, _ = self.trace_moves(state)
             score = sum([s._score for s in move_list[1:]])
@@ -255,12 +210,12 @@ class Solver:
                     state = self._state_queue.pop()
                     if state._score is not None:
                         del state._score
-                        packed_array = Catalog.unpack(state)
+                        state.unpack()
                         if self.check_finish(state):
                             del state._temp, state._track
                             return finish_solve(state)
                         next = self.get_next_states(state)
-                        state._grid = packed_array
+                        state.repack()
                         for _, s in next.items():
                             s.previous = state
                             if optimize_score:
@@ -270,7 +225,7 @@ class Solver:
                             if score[0] + self.lower_bound(s) > max_depth:
                                 continue
                             s._score = score
-                            Catalog.pack(s)
+                            s.pack()
                             if self._prev_states.setdefault(s, s) is s:
                                 self._next_queue.setdefault(score, deque()).appendleft(s)
                                 if score[0] == self._depth[0]:
@@ -314,9 +269,9 @@ class Solver:
                 while True:
                     count_iterate += 1
                     state = self._state_queue.pop()
-                    packed_array = Catalog.unpack(state)
+                    state.unpack()
                     next = self.get_next_states(state)
-                    state._grid = packed_array
+                    state.repack()
                     for _, s in next.items():
                         s.previous = state
                         if self.check_finish(s):
@@ -325,7 +280,7 @@ class Solver:
                             return finish_solve(s)
                         if self._depth + self.lower_bound(s) > max_depth:
                             continue
-                        Catalog.pack(s)
+                        s.pack()
                         if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
                             self._next_queue.appendleft(s)
                         del s._score
@@ -385,9 +340,8 @@ class Solver:
             else:
                 for m in move_list: print(m)
         if move_list:
-            packed_arrays = []
             for m in move_list:
-                packed_arrays.append(Catalog.unpack(m))
+                m.unpack()
                 m._track = {}
                 m._temp = {}
             names = []
@@ -403,29 +357,10 @@ class Solver:
                     print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
                     break
             if prnt: print(' '.join(names))
-            for i, m in enumerate(move_list):
-                m._grid = packed_arrays[i]
+            for m in move_list:
+                m.repack()
             move_list = new_list
         return move_list, names
-    def increase_compression(self):
-        lvl = Catalog.level
-        prev = self._prev_states
-        self._prev_states = {}
-        if lvl == 0:
-            while prev:
-                s = prev.pop()
-                Catalog.pack1(s)
-                self._prev_states.add(s)
-        elif lvl == 1:
-            while prev:
-                s = prev.pop()
-                Catalog.unpack1(s)
-                Catalog.pack2(s)
-                self._prev_states.add(s)
-        else:
-            print('STATES CANNOT BE FURTHER COMPRESSED')
-            return
-        Catalog.set_compression_level(lvl + 1)
 
     def debug(self):
         prev_moves = []
@@ -436,10 +371,10 @@ class Solver:
             finished = self.check_finish(state)
             if finished: moves = {}
             else: moves = self.get_next_states(state)
-            Catalog.pack(state)
+            state.pack()
             moves = {str(k):v for k,v in moves.items()}
             for v in moves.values():
-                Catalog.pack(v)
+                v.pack()
                 v.previous = state
             print(state)
             if prev_moves: print('Moves: ' + ' '.join(prev_moves))
@@ -463,7 +398,7 @@ class Solver:
             if move:
                 prev_moves.append(move)
                 state = moves[move]
-            Catalog.unpack(state)
+            state.unpack()
     
 @dataclass
 class Vec2:
