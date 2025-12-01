@@ -7,13 +7,21 @@ class Catalog:
     level = 0
     @staticmethod
     def init():
-        Catalog.catalog = [None]; Catalog.used = {}
+        Catalog.catalog = []; Catalog.used = {}
     @staticmethod
     def add(val):
         if val in Catalog.used:
             return Catalog.used[val]
         Catalog.catalog.append(val)
         Catalog.used[val] = len(Catalog.catalog) - 1
+        return len(Catalog.catalog) - 1
+    @staticmethod
+    def sadd(val):
+        sval = pickle.dumps(val)
+        if sval in Catalog.used:
+            return Catalog.used[sval]
+        Catalog.catalog.append(val)
+        Catalog.used[sval] = len(Catalog.catalog) - 1
         return len(Catalog.catalog) - 1
     @staticmethod
     def tadd(val):
@@ -30,20 +38,20 @@ class Catalog:
 class GridState:
     def __init__(self, grid):
         self._grid = grid.copy()
-        self._vars = {}
+        self._vars = Catalog.sadd({})
         self._track = {}
         self._temp = {}
         self._score = 1
     def __hash__(self):
         if self._vars:
-            return hash(self._grid) ^ hash(pickle.dumps(self._vars))
+            return hash(self._grid) ^ hash(self._vars)
         return hash(self._grid)
     def __eq__(self, state):
         return self._grid == state._grid and self._vars == state._vars
     def __repr__(self):
         s = '\n'.join([''.join([s[0] for s in Catalog.get(row)]) for row in self._grid])
         if self._vars:
-            s += '\nVars: ' + str(self._vars)
+            s += '\nVars: ' + str(Catalog.get(self._vars))
         if hasattr(self, '_temp') and self._temp:
             s += '\nTemp: ' + str(self._temp)
         return s
@@ -60,8 +68,7 @@ class GridState:
         self._grid = tuple(arr)
     def unpack(self):
         self._packed = self._grid
-        grid = [Catalog.get(n) for n in self._grid]
-        self._grid = grid
+        self._grid = [Catalog.get(n) for n in self._grid]
         self._readonly = True
     def repack(self):
         self._grid = self._packed
@@ -125,19 +132,22 @@ class GridState:
                     total += 1
         return total
     def get_var(self, var):
-        return self._vars.get(var)
+        return Catalog.get(self._vars).get(var)
     def set_var(self, var, val):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
-        self._vars = self._vars.copy()
+        self._vars = Catalog.get(self._vars).copy()
         self._vars[var] = val
+        self._vars = Catalog.sadd(self._vars)
     def inc_var(self, var, num=1):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
-        self._vars = self._vars.copy()
+        self._vars = Catalog.get(self._vars).copy()
         self._vars[var] += num
+        self._vars = Catalog.sadd(self._vars)
     def dec_var(self, var, num=1):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
-        self._vars = self._vars.copy()
+        self._vars = Catalog.get(self._vars).copy()
         self._vars[var] -= num
+        self._vars = Catalog.sadd(self._vars)
     def get_temp(self, var):
         return self._temp.get(var)
     def set_temp(self, var, val):
