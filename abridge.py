@@ -1,5 +1,5 @@
 import pickle
-from solvernew import Solver, GridState
+from solvernew import Solver, GridState, DIRECTIONS8
 
 class AbridgeSolver(Solver):
     def setup(self, puzzle):
@@ -23,9 +23,14 @@ class AbridgeSolver(Solver):
         states = {}
         move = state.get_var('move')
         for p in self.open_tiles:
-            val = state.get(p[0], p[1])[0]
-            if val in ' #X' or move == p:
+            val = state.get(p[0], p[1])
+            if val[0] in ' #X' or move == p:
                 continue
+            if val[-1] == 'c':
+                for dirx, diry in DIRECTIONS8:
+                    if state.get(p[0]+dirx, p[1]+diry) != '#':
+                        break
+                else: return {}
             new_state = state.copy()
             new_state.set_var('move', p)
             new_state.set_score(0)
@@ -53,13 +58,15 @@ class AbridgeSolver(Solver):
             states['^>'] = self.copy_and_push(state, x, y, 1, -1)
             states['v>'] = self.copy_and_push(state, x, y, 1, 1)
         elif val == 'O':
-            states['^'] = self.copy_and_push(state, x, y+1, 0, -1)
-            states['<'] = self.copy_and_push(state, x+1, y, -1, 0)
-            states['>'] = self.copy_and_push(state, x-1, y, 1, 0)
-            states['v'] = self.copy_and_push(state, x, y-1, 0, 1)
+            states['^'] = self.copy_and_push(state, x, y+1, 0, -1, True)
+            states['<'] = self.copy_and_push(state, x+1, y, -1, 0, True)
+            states['>'] = self.copy_and_push(state, x-1, y, 1, 0, True)
+            states['v'] = self.copy_and_push(state, x, y-1, 0, 1, True)
         return {k:v for k,v in states.items() if v is not None}
     def check_finish(self, state):
         return state.get_temp('tiles') == 0
+    def lower_bound(self, state):
+        return state.get_temp('tiles')
     def push(self, state, x, y, dx, dy):
         nextx, nexty = x+dx, y+dy
         val, nextval = state.get(x, y), state.get(nextx, nexty)
@@ -86,12 +93,18 @@ class AbridgeSolver(Solver):
             state.set(nextx, nexty, val)
             state.set(x, y, ' ')
             return True
-    def copy_and_push(self, state, x, y, dx, dy):
+    def copy_and_push(self, state, x, y, dx, dy, circle=False):
         new_state = state.copy()
         result = self.push(new_state, x, y, dx, dy)
         if not result: return None
-        new_state.set_var('move', (x+dx, y+dy))
-        if state.get(x, y)[-1] == 'c': new_state.set(x, y, '#')
+        if circle:
+            new_state.set_var('move', (x+dx+dx, y+dy+dy))
+        else:
+            new_state.set_var('move', (x+dx, y+dy))
+            if state.get(x, y)[-1] == 'c':
+                new_state.set(x, y, '#')
+        if state.get(x, y)[-1] == 's':
+            pass
         return new_state
     def is_trapped(self, x, y, tile):
         if tile == '^' and self.trapsU[y][x] or \
@@ -143,94 +156,9 @@ class AbridgeSolver(Solver):
             self.trapsD[y][x] = not self.can_escape(state, x, y, 0, -1, diagonal)
 
 def from_strs(strs):
-    map = {}
+    map = {'+':'^c', '-':'vc', '}':'>c', '{':'<c', 'b':'Bc', 'y':'Yc',
+           'U':'^s', 'D':'vs', 'R':'>s', 'L':'<s', 'W':'Bs', 'S':'Ys', 'F':'Os'}
     return [[map.get(c) or c for c in s] for s in strs]
-
-puzzle_doubles = [ #Failed even after 45000K+ iterations, this will need a LOT of state pruning
-    ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
-    ['#','#','#','v','v',' ',' ',' ',' ','#','#','#','#','#','#'],
-    ['#','#','*',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ',' ','#','v','v','#','#','#'],
-    ['#','#','#','#','#','#',' ',' ',' ',' ',' ',' ','#','#','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ',' ','#','#','#','#','#','#'],
-    ['#','#','#',' ',' ','>','<',' ',' ','#','#','#','#','#','#'],
-    ['#','#','#','^','^',' ',' ','^','^','#','#','#','#','#','#'],
-    ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_follow_the_leader = [ #Approximated
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#',' ',' ',' ','#',' ',' ',' ','#'],
-    ['#',' ','#',' ',' ',' ','*',' ','#'],
-    ['#','^',' ',' ','#','v',' ',' ','#'],
-    ['#',' ','#','#','#','#','#','#','#'],
-    ['#',' ',' ','>',' ','<',' ',' ','#'],
-    ['#',' ','#',' ','#',' ','#',' ','#'],
-    ['#',' ','Y',' ','#',' ',' ','O','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_scattered = [ #Approximated
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#','b',' ',' ',' ',' ',' ','b','#'],
-    ['#',' ',' ','#','#','#',' ',' ','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ','y','#','*','y',' ',' ','#'],
-    ['#',' ','-',' ','#',' ',' ',' ','#'],
-    ['#',' ',' ',' ',' ','#',' ',' ','#'],
-    ['#','b',' ',' ','#',' ',' ','b','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_knockback = [ #Approximated
-    ['#','#','#','#','#','#','#'],
-    ['#','>','>','X',' ','#','#'],
-    ['#',' ','#','^',' ',' ','#'],
-    ['#',' ','O','#','X',' ','#'],
-    ['#',' ','#',' ','*','#','#'],
-    ['#','Y','X',' ',' ',' ','#'],
-    ['#','#','#','#','#','#','#'],
-]
-
-puzzle_expedition = [
-    ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
-    ['#','#',' ','#','#',' ','#','#','#','#','#',' ',' ',' ','#','#'],
-    ['#',' ',' ',' ',' ',' ','#','#','#','#','#',' ','*',' ','#','#'],
-    ['#','#',' ','#','#',' ',' ',' ',' ','#','#',' ',' ',' ','X','#'],
-    ['#',' ',' ','#','#','#','#','#',' ','#','#','#','#',' ',' ','#'],
-    ['#','#',' ','#','#','#',' ',' ',' ','#','#',' ','X','X',' ','#'],
-    ['#','#',' ','#','#',' ',' ','#','#','#','#',' ','#','#','#','#'],
-    ['#','O',' ','#','#','#',' ',' ',' ',' ',' ',' ','#','#','#','#'],
-    ['#','O',' ','B','#','#','#','v','#','#','#','#','#','#','#','#'],
-    ['#','X','Y','#','#','#',' ','X',' ','#','#','#','#','#','#','#'],
-    ['#','#','#','#','#','#','#','#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_dead_ends = [
-    ['#','#','#','#','#','#','#','#','#','#','#'],
-    ['#','#','#','#',' ','^',' ','#','#','#','#'],
-    ['#','#','#','#',' ',' ',' ','#','#','#','#'],
-    ['#','#','#','#',' ',' ',' ','#','#','#','#'],
-    ['#',' ',' ',' ','F','#','W',' ',' ',' ','#'],
-    ['#','<',' ',' ','#','*','#',' ',' ',' ','#'],
-    ['#',' ',' ',' ','W',' ','F',' ',' ',' ','#'],
-    ['#','#','#','#',' ',' ',' ','#','#','#','#'],
-    ['#','#','#','#',' ',' ',' ','#','#','#','#'],
-    ['#','#','#','#',' ',' ',' ','#','#','#','#'],
-    ['#','#','#','#','#','#','#','#','#','#','#'],
-]
-
-puzzle_invasion = [ #Failed
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#',' ',' ',' ','*',' ',' ',' ','#'],
-    ['#','X','X','#','#','X','#','X','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ',' ',' ',' ',' ',' ',' ','#'],
-    ['#',' ','F','W',' ','F','W',' ','#'],
-    ['#',' ','S','U',' ','S','U',' ','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
 
 #############################################################################
 
@@ -244,17 +172,17 @@ puzzle_a_little_extra = [ #Testing
     ['#','#','#','#','#','#','#','#','#'],
 ]
 
-puzzle_misdirection = [ #Testing
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#',' ',' ','#',' ',' ','#',' ','#'],
-    ['#','>','#',' ','#',' ',' ',' ','#'],
-    ['#',' ',' ','#',' ',' ','#',' ','#'],
-    ['#',' ','#',' ','*',' ',' ',' ','#'],
-    ['#',' ',' ','#',' ',' ','#',' ','#'],
-    ['#',' ','#','X','#',' ',' ','<','#'],
-    ['#',' ',' ','#','Y','b','#',' ','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
+puzzle_misdirection = from_strs([ #Testing
+'#########',
+'#  #  # #',
+'#># #   #',
+'#  #  # #',
+'# # *   #',
+'#  #  # #',
+'# #X#  <#',
+'#  #Yb# #',
+'#########',
+])
 
 
 puzzle_jumble = [ #Testing
@@ -284,18 +212,16 @@ puzzle_test = [
 ]
 
 puzzle_x = from_strs([
-'#########',
-'# #######',
-'# #######',
-'#      <#',
-'#     v<#',
-'# > #  <#',
-'#   # ^ #',
-'#*  #^  #',
-'#########',
+'#######',
+'#}XXX*#',
+'#byX b#',
+'# X*XO#',
+'#X   X#',
+'#*XXX{#',
+'#######',
 ])
 
-AbridgeSolver().solve_optimal(puzzle_x, debug=0, use_score=1, optimize_score=1)
+AbridgeSolver().solve_optimal(puzzle_misdirection, debug=0, use_score=0, optimize_score=1)
 
 puzzle_blank = from_strs([
 '#######',
