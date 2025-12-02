@@ -143,6 +143,11 @@ class GridState:
         self._vars = Catalog.get(self._vars).copy()
         self._vars[var] = val
         self._vars = Catalog.sadd(self._vars)
+    def del_temp(self, var):
+        if hasattr(self, '_readonly'): raise Exception('State is read only')
+        self._vars = Catalog.get(self._vars).copy()
+        del self._vars[var]
+        self._vars = Catalog.sadd(self._vars)
     def inc_var(self, var, num=1):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
         self._vars = Catalog.get(self._vars).copy()
@@ -158,6 +163,10 @@ class GridState:
     def set_temp(self, var, val):
         self._temp = self._temp.copy()
         self._temp[var] = val
+    def del_temp(self, var):
+        if var not in self._temp: return
+        self._temp = self._temp.copy()
+        del self._temp[var]
     def inc_temp(self, var, num=1):
         if var not in self._temp: return
         self._temp = self._temp.copy()
@@ -172,6 +181,7 @@ class GridState:
 class Solver:
     def setup(self, puzzle): return puzzle #Override if initial setup is necessary
     def get_next_states(self, state): return {} #Must override
+    def check_valid(self, state): return True #Optional to override
     def check_finish(self, state): return False #Must override
     def lower_bound(self, state): return 0 #(Optional) Minimum moves to solve
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
@@ -185,7 +195,15 @@ class Solver:
         if optimize_score:
             use_score = True
         if debug:
-            return self.debug()
+            try:
+                return self.debug()
+            except FileNotFoundError as e:
+                print("Exception thrown while solving!")
+                print(repr(e))
+                raise e
+            except KeyboardInterrupt:
+                print('Solve terminated.')
+                return []
         starting_state = self.setup(puzzle)
         starting_state.previous = None
         starting_state.pack()
@@ -236,6 +254,7 @@ class Solver:
                         state.repack()
                         for _, s in next.items():
                             s.previous = state
+                            if not self.check_valid(s): continue
                             if optimize_score:
                                 score = (self._depth[0] + s._score, self._depth[1] + 1)
                             else:
@@ -292,6 +311,7 @@ class Solver:
                     state.repack()
                     for _, s in next.items():
                         s.previous = state
+                        if not self.check_valid(s): continue
                         if self.check_finish(s):
                             del state._temp
                             del s._temp
@@ -335,7 +355,6 @@ class Solver:
             raise e
         except KeyboardInterrupt:
             print('Solve terminated.')
-            print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             return []
         print("No solution exists.")
         elapsed = time.time() - start_time
@@ -389,6 +408,7 @@ class Solver:
             if len(m1) < len(m2): newstr += Solver._red+m2[len(m1):]+Solver._black
             input()
             print(newstr)
+        print(Solver._green + f'Puzzle solved!' + Solver._black)
     def debug(self):
         prev_moves = []
         state = self.setup(self._puzzle)
