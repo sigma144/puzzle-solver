@@ -206,8 +206,8 @@ class Solver:
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-            self.replay_moves(moves)
             del self._prev_states, self._state_queue, self._next_queue
+            self.replay_moves(moves)
             return moves
         try:
             if use_score:
@@ -316,7 +316,7 @@ class Solver:
                         print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
                             +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                             +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-        except Exception as e:
+        except FileNotFoundError as e:
             try:
                 Catalog.pack(state)
                 _, names = self.trace_moves(state)
@@ -327,6 +327,10 @@ class Solver:
             print("Exception thrown while solving!")
             print(repr(e))
             raise e
+        except KeyboardInterrupt:
+            print('Solve terminated.')
+            print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
+            return []
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
