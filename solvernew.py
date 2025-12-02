@@ -212,8 +212,8 @@ class Solver:
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-            del self._prev_states, self._state_queue, self._next_queue
             self.replay_moves(moves)
+            del self._prev_states, self._state_queue, self._next_queue
             return moves
         try:
             if use_score:
@@ -398,7 +398,7 @@ class Solver:
             finished = self.check_finish(state)
             if finished: moves = {}
             else: moves = self.get_next_states(state)
-            state.pack()
+            state.repack()
             moves = {str(k):v for k,v in moves.items()}
             for v in moves.values():
                 v.pack()
