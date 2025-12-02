@@ -39,9 +39,10 @@ class GridState:
     def __init__(self, grid):
         self._grid = grid.copy()
         self._vars = Catalog.sadd({})
-        self._track = {}
         self._temp = {}
         self._score = 1
+        self._packed = tuple(Catalog.tadd(row) for row in grid)
+        self._write = set()
     def __hash__(self):
         if self._vars:
             return hash(self._grid) ^ hash(self._vars)
@@ -59,13 +60,15 @@ class GridState:
         state = GridState.__new__(GridState)
         state._grid = self._grid.copy()
         state._vars = self._vars
-        state._track = self._track
         state._temp = self._temp
         state._score = 1
+        state._packed = self._packed
+        state._write = self._write.copy() if hasattr(self, '_write') else set()
         return state
     def pack(self):
-        arr = [Catalog.tadd(row) for row in self._grid]
+        arr = [Catalog.tadd(row) if i in self._write else self._packed[i] for i, row in enumerate(self._grid)]
         self._grid = tuple(arr)
+        del self._write, self._packed
     def unpack(self):
         self._packed = self._grid
         self._grid = [Catalog.get(n) for n in self._grid]
@@ -81,12 +84,14 @@ class GridState:
         if hasattr(self, '_readonly'): raise Exception('State is read only')
         self._grid[y] = self._grid[y].copy()
         self._grid[y][x] = val
+        self._write.add(y)
     def set_and_track(self, x, y, val):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
         self._grid[y] = self._grid[y].copy()
         self._grid[y][x] = val
-        self._track = self._track.copy()
-        self._track[val] = (x, y)
+        self._temp = self._temp.copy()
+        self._temp[val] = (x, y)
+        self._write.add(y)
     def size(self):
         return len(self._grid[0]), len(self._grid)
     def all_points(self):
@@ -116,13 +121,13 @@ class GridState:
                 if self._grid[y][x] == val:
                     return (x, y)
     def find_and_track(self, val):
-        if val in self._track:
-            return self._track[val]
+        if val in self._temp:
+            return self._temp[val]
         for y in range(len(self._grid)):
             for x in range(len(self._grid[y])):
                 if self._grid[y][x] == val:
-                    self._track = self._track.copy()
-                    self._track[val] = (x, y)
+                    self._temp = self._temp.copy()
+                    self._temp[val] = (x, y)
                     return (x, y)
     def count(self, val):
         total = 0
@@ -193,6 +198,7 @@ class Solver:
         depth_start = 0
         if max_depth == 0: max_depth = 999999999
         def finish_solve(state):
+            state._write = {i for i in range(len(state._grid))}
             state.pack()
             elapsed = time.time() - start_time
             moves, names = self.trace_moves(state)
@@ -224,7 +230,7 @@ class Solver:
                         del state._score
                         state.unpack()
                         if self.check_finish(state):
-                            del state._temp, state._track
+                            del state._temp
                             return finish_solve(state)
                         next = self.get_next_states(state)
                         state.repack()
@@ -254,7 +260,7 @@ class Solver:
                             memuse = int(psutil.virtual_memory()[2])
                             print(state)
                             print("Depth "+str(self._depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
-                        del state._temp, state._track, state._readonly
+                        del state._temp, state._readonly
                     if len(self._state_queue) == 0:
                         #self._prev_states = set()
                         del self._next_queue[self._depth]
@@ -287,8 +293,8 @@ class Solver:
                     for _, s in next.items():
                         s.previous = state
                         if self.check_finish(s):
-                            del state._temp, state._track
-                            del s._temp, s._track
+                            del state._temp
+                            del s._temp
                             return finish_solve(s)
                         if self._depth + self.lower_bound(s) > max_depth:
                             continue
@@ -300,7 +306,7 @@ class Solver:
                         memuse = int(psutil.virtual_memory()[2])
                         print(state)
                         print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
-                    del state._temp, state._track, state._readonly
+                    del state._temp, state._readonly
                     if len(self._state_queue) == 0:
                         #self._prev_states = set()
                         if len(self._next_queue) == 0: break #No solution found
@@ -344,7 +350,6 @@ class Solver:
         if moves:
             for m in moves:
                 m.unpack()
-                m._track = {}
                 m._temp = {}
             new_list = [self.setup(self._puzzle)]
             for m in moves[1:]:
@@ -361,8 +366,9 @@ class Solver:
                 m.repack()
             moves = new_list
             for m in moves:
+                m._write = {i for i in range(len(m._grid))}
                 m.pack()
-                del m._temp, m._track
+                del m._temp
         return moves, names
     def replay_moves(self, moves, diff=1, diff_trail=0):
         if not diff:
