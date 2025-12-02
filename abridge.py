@@ -22,19 +22,21 @@ class AbridgeSolver(Solver):
     def get_next_states(self, state):
         states = {}
         move = state.get_var('move')
-        for p in self.open_tiles:
-            val = state.get(p[0], p[1])
-            if val[0] in ' #X' or move == p:
-                continue
-            if val[-1] == 'c':
-                for dirx, diry in DIRECTIONS8:
-                    if state.get(p[0]+dirx, p[1]+diry) != '#':
-                        break
-                else: return {}
-            new_state = state.copy()
-            new_state.set_var('move', p)
-            new_state.set_score(0)
-            states[p] = new_state
+        if not state.get_temp('click'):
+            for p in self.open_tiles:
+                val = state.get(p[0], p[1])
+                if val[0] in ' #X' or move == p:
+                    continue
+                if val[-1] == 'c':
+                    for dirx, diry in DIRECTIONS8:
+                        if state.get(p[0]+dirx, p[1]+diry) != '#':
+                            break
+                    else: return {}
+                new_state = state.copy()
+                new_state.set_var('move', p)
+                new_state.set_score(0)
+                new_state.set_temp('click', 1)
+                states[p] = new_state
         if move is None:
             return states
         x, y = move
@@ -95,6 +97,7 @@ class AbridgeSolver(Solver):
             return True
     def copy_and_push(self, state, x, y, dx, dy, circle=False):
         new_state = state.copy()
+        new_state.set_temp('click', 0)
         result = self.push(new_state, x, y, dx, dy)
         if not result: return None
         if circle:
@@ -212,16 +215,15 @@ puzzle_test = [
 ]
 
 puzzle_x = from_strs([
-'#######',
-'#}XXX*#',
-'#byX b#',
-'# X*XO#',
-'#X   X#',
-'#*XXX{#',
-'#######',
+'#########',
+'#O ###  #',
+'##^<Y^>>#',
+'## #*#  #',
+'#######B#',
+'#########',
 ])
 
-AbridgeSolver().solve_optimal(puzzle_misdirection, debug=0, use_score=0, optimize_score=1)
+AbridgeSolver().solve_optimal(puzzle_x, debug=0, use_score=0, optimize_score=1)
 
 puzzle_blank = from_strs([
 '#######',
