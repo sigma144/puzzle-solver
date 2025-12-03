@@ -184,9 +184,10 @@ class Solver:
     def check_valid(self, state): return True #Optional to override
     def check_finish(self, state): return False #Must override
     def lower_bound(self, state): return 0 #(Optional) Minimum moves to solve
+    def approximate(self, state): return 0 #(Optional) Estimate distance to solution
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver = None
-    def solve_optimal(self, puzzle, debug=0, use_score=0, optimize_score=0, max_depth=0, **kwargs):
+    def solve(self, puzzle, debug=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, **kwargs):
         start_time = time.time()
         Catalog.init()
         Solver.solver = self
@@ -194,9 +195,13 @@ class Solver:
         self._puzzle = puzzle
         if optimize_score:
             use_score = True
+        approx_auto = False
+        if approx_factor == 0:
+            approx_factor = 5
+            approx_auto = True
         if debug:
             try:
-                return self.debug()
+                return self.debug(use_score)
             except FileNotFoundError as e:
                 print("Exception thrown while solving!")
                 print(repr(e))
@@ -223,14 +228,14 @@ class Solver:
             print(' '.join(names))
             score = sum([s._score for s in moves[1:]])
             if optimize_score:
-                print("Solved with score", str(score)+"!")
+                print("Solved with score", str(score)+"!", '(Approximated)' if approximate else '')
                 print("Moves:", len(moves)-1)
             else:
                 print("Solved in", len(moves)-1, "moves!")
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-            self.replay_moves(moves)
+            self.replay_moves(moves, names)
             del self._prev_states, self._state_queue, self._next_queue
             return moves
         try:
@@ -240,6 +245,9 @@ class Solver:
                 self._state_queue.append(starting_state)
                 self._next_queue = {(0, 0): self._state_queue}
                 self._depth = (0, 0)
+                start_approx = 0
+                if approximate:
+                    start_approx = self.approximate(starting_state) * approx_factor
                 starting_state._score = (0, 0)
                 while True:
                     count_iterate += 1
@@ -247,6 +255,7 @@ class Solver:
                     if state._score is not None:
                         del state._score
                         state.unpack()
+                        old_approx = self.approximate(state) * approx_factor
                         if self.check_finish(state):
                             del state._temp
                             return finish_solve(state)
@@ -259,7 +268,11 @@ class Solver:
                                 score = (self._depth[0] + s._score, self._depth[1] + 1)
                             else:
                                 score = (self._depth[0] + 1, self._depth[1] + s._score)
-                            if score[0] + self.lower_bound(s) > max_depth:
+                            if approximate:
+                                if not approx_auto and score[0] + start_approx - old_approx > max_depth:
+                                    continue
+                                score = (score[0] - old_approx + self.approximate(s) * approx_factor, score[1])
+                            elif score[0] + self.lower_bound(s) > max_depth:
                                 continue
                             s._score = score
                             s.pack()
@@ -294,9 +307,15 @@ class Solver:
                             time_diff = elapsed - depth_last
                             depth_last = elapsed
                             depth_time = time.time()
-                            print("Depth "+str(self._depth[0])+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
-                                +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
-                                +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                            if not approximate:
+                                print("Depth "+str(self._depth[0])+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
+                                    +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
+                                    +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
+                            if approx_auto:
+                                if self._depth[0] < 0 and approx_factor > 1:
+                                    approx_factor -= 1
+                                elif self._depth[0] > 10 and approx_factor < 10:
+                                    approx_factor += 1
                         self._depth = least_score
             else:
                 self._prev_states = {starting_state}   
@@ -389,9 +408,9 @@ class Solver:
                 m.pack()
                 del m._temp
         return moves, names
-    def replay_moves(self, moves, diff=1, diff_trail=0):
+    def replay_moves(self, moves, names, diff=1, diff_trail=0):
         if not diff:
-            for m, _ in moves:
+            for m in moves:
                 print(m)
                 input()
             return
@@ -409,7 +428,8 @@ class Solver:
             input()
             print(newstr)
         print(Solver._green + f'Puzzle solved!' + Solver._black)
-    def debug(self):
+        print(' '.join(names))
+    def debug(self, use_score=0):
         prev_moves = []
         state = self.setup(self._puzzle)
         state.previous = None
@@ -429,7 +449,10 @@ class Solver:
             if finished:
                 print(Solver._green + f'Puzzle solved in {len(prev_moves)} moves!' + Solver._black)
                 moves, _ = self.trace_moves(state)
-                self.replay_moves(moves)
+                if use_score:
+                    score = sum(s._score for s in moves[1:])
+                    print(Solver._green + f'Score: ' + str(score) + Solver._black)
+                self.replay_moves(moves, prev_moves)
                 return
             move = None
             while move not in moves:
@@ -488,6 +511,7 @@ class Vec3:
 DLEFT = Vec3(-1, 0, 0); DRIGHT = Vec3(1, 0, 0); DUP = Vec3(0, -1, 0); DDOWN = Vec3(0, 1, 0)
 DBELOW = Vec3(0, 0, -1); DABOVE = Vec3(0, 0, 1); DZERO = Vec3(0, 0, 0)
 DIRECTIONS = {'>':(1, 0), 'v':(0, 1), '<':(-1, 0), '^':(0, -1)}
+DIRECTIONSDIAG = {(1, 1), (1, -1), (-1, 1), (-1, -1)}
 DIRECTIONS3D = [DLEFT, DRIGHT, DUP, DDOWN]
 DIRECTIONS8 = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
 DIRECTIONS8_HALF = [(-1, 0), (-1, -1), (0, -1), (1, -1)]
