@@ -116,6 +116,9 @@ class AbridgeSolver(Solver):
                 state.dec_temp('circles', 1)
                 if state.get_temp('circles') == 0:
                     state.del_temp('circles')
+                    for px, py in self.open_tiles:
+                        if self.is_trapped(px, py, state.get(px, py)):
+                            return False
             state.set(x, y, ' ')
             return True
         else:
@@ -247,21 +250,17 @@ puzzle_test = [
 ]
 
 puzzle = from_strs([
-'################',
-'## ## #####   ##',
-'#     ##### * ##',
-'## ##    ##   X#',
-'#  ##### ####  #',
-'## ###   ## XX #',
-'## ##  #### ####',
-'#O ###      ####',
-'#O B###v########',
-'#XY### X #######',
-'################',
+'#######',
+'#>>X ##',
+'# #^  #',
+'# O#X #',
+'# # *##',
+'#YX   #',
+'#######',
 ])
 
 AbridgeSolver().solve(puzzle, debug=0, use_score=0, optimize_score=1,
-                      approximate=1, approx_factor=10, max_depth=186)
+                      approximate=0, approx_factor=20, max_depth=86)
 
 puzzle_blank = from_strs([
 '#######',
