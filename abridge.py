@@ -1,5 +1,5 @@
 import pickle
-from solvernew import Solver, GridState, DIRECTIONS8
+from solvernew import Solver, GridState, DIRECTIONS8, DIRECTIONS, DIRECTIONSDIAG
 
 class AbridgeSolver(Solver):
     def setup(self, puzzle):
@@ -14,29 +14,53 @@ class AbridgeSolver(Solver):
             self.open_tiles.append((x, y))
             if val != ' ':
                 state.inc_temp('tiles')
-            if val == 'O':
+            if val[0] == 'O':
                 state.inc_temp('circles')
+        if state.get_temp('circles') == 0:
+            state.del_temp('circles')
         self.detect_traps(state)
         #for l in [self.trapsU, self.trapsD, self.trapsL, self.trapsR]: print('\n'.join([''.join([str(int(n)) for n in row]) for row in l])+'\n')
         return state
     def get_next_states(self, state):
         states = {}
         move = state.get_var('move')
+        symmetry = {}
         if not state.get_temp('click'):
             for p in self.open_tiles:
                 val = state.get(p[0], p[1])
-                if val[0] in ' #X' or move == p:
+                if val[0] in ' #X' or move == p:#or state.get_temp('sym') == p:
                     continue
                 if val[-1] == 'c':
-                    for dirx, diry in DIRECTIONS8:
+                    for dirx, diry in DIRECTIONS.values():
                         if state.get(p[0]+dirx, p[1]+diry) != '#':
                             break
-                    else: return {}
+                    else:
+                        for p2 in self.open_tiles:
+                            if state.get(p2[0], p2[1])[0] == 'Y':
+                                break
+                        else: return {}
+                        count = 0
+                        for dirx, diry in DIRECTIONSDIAG:
+                            if state.get(p[0]+dirx, p[1]+diry) != '#':
+                                count += 1
+                                if count == 2: break
+                        else: return {}
                 new_state = state.copy()
                 new_state.set_var('move', p)
                 new_state.set_score(0)
                 new_state.set_temp('click', 1)
                 states[p] = new_state
+                if val[-1] == 's':
+                    val = val[0]
+                    if val in 'v<>': val = '^'
+                    if val in symmetry:
+                        states[symmetry[val]].set_temp('sym', p)
+                        new_state.set_temp('sym', symmetry[val])
+                    else:
+                        symmetry[val] = p
+                        new_state.del_temp('sym')
+                else:
+                    new_state.del_temp('sym')
         if move is None:
             return states
         x, y = move
@@ -60,14 +84,17 @@ class AbridgeSolver(Solver):
             states['^>'] = self.copy_and_push(state, x, y, 1, -1)
             states['v>'] = self.copy_and_push(state, x, y, 1, 1)
         elif val == 'O':
-            states['^'] = self.copy_and_push(state, x, y+1, 0, -1, True)
-            states['<'] = self.copy_and_push(state, x+1, y, -1, 0, True)
-            states['>'] = self.copy_and_push(state, x-1, y, 1, 0, True)
-            states['v'] = self.copy_and_push(state, x, y-1, 0, 1, True)
+            sym = state.get(x, y)[-1] == 's'
+            states['^'] = self.copy_and_push(state, x, y+1, 0, -1, True, sym)
+            states['<'] = self.copy_and_push(state, x+1, y, -1, 0, True, sym)
+            states['>'] = self.copy_and_push(state, x-1, y, 1, 0, True, sym)
+            states['v'] = self.copy_and_push(state, x, y-1, 0, 1, True, sym)
         return {k:v for k,v in states.items() if v is not None}
     def check_finish(self, state):
         return state.get_temp('tiles') == 0
     def lower_bound(self, state):
+        return state.get_temp('tiles')
+    def approximate(self, state):
         return state.get_temp('tiles')
     def push(self, state, x, y, dx, dy):
         nextx, nexty = x+dx, y+dy
@@ -87,6 +114,8 @@ class AbridgeSolver(Solver):
             state.dec_temp('tiles', 1)
             if val[0] == 'O':
                 state.dec_temp('circles', 1)
+                if state.get_temp('circles') == 0:
+                    state.del_temp('circles')
             state.set(x, y, ' ')
             return True
         else:
@@ -95,19 +124,48 @@ class AbridgeSolver(Solver):
             state.set(nextx, nexty, val)
             state.set(x, y, ' ')
             return True
-    def copy_and_push(self, state, x, y, dx, dy, circle=False):
+    def copy_and_push(self, state, x, y, dx, dy, circle=False, symcircle=False):
         new_state = state.copy()
-        new_state.set_temp('click', 0)
-        result = self.push(new_state, x, y, dx, dy)
-        if not result: return None
+        new_state.del_temp('click')
+        val = state.get(x, y)
+        if symcircle and state.get_temp('sym') is not None:
+            if not self.push(new_state, x, y, dx, dy):
+                return None
+            sx, sy = state.get_temp('sym')
+            if x == sx and y == sy:
+                self.push(new_state, x-dx, y-dy, dx, dy)
+            elif (x+dx+dx != sx or y+dy+dy != sy) and state.get(sx, sy) == new_state.get(sx, sy):
+                if state.get(sx-dx-dx, sy-dy-dy) == state.get(x+dx, y+dy):
+                    if not self.push(new_state, sx, sy, dx, dy):
+                        return None
+                elif not self.push(new_state, sx-dx, sy-dy, dx, dy):
+                    return None
+            if state.get(sx+dx, sy+dy) == '*':
+                new_state.del_temp('sym')
+            else: new_state.set_temp('sym', (sx+dx, sy+dy))
+        elif not circle and val[-1] == 's' and state.get_temp('sym') is not None:
+            if not self.push(new_state, x, y, dx, dy):
+                return None
+            sx, sy = state.get_temp('sym')
+            sdx = dx; sdy = dy
+            if state.get(sx, sy)[0] != val[0]:
+                sdx = -sdx; sdy = -sdy
+            if (x+dx != sx or y+dy != sy) and state.get(sx, sy) == new_state.get(sx, sy) \
+                and not self.push(new_state, sx, sy, sdx, sdy):
+                return None
+            if state.get(sx+sdx, sy+sdy) == '*':
+                new_state.del_temp('sym')
+            else: new_state.set_temp('sym', (sx+sdx, sy+sdy))
+            if len(state.get(sx, sy)) == 3:
+                new_state.set(sx, sy, '#')
+        elif not self.push(new_state, x, y, dx, dy):
+            return None
         if circle:
             new_state.set_var('move', (x+dx+dx, y+dy+dy))
         else:
             new_state.set_var('move', (x+dx, y+dy))
-            if state.get(x, y)[-1] == 'c':
+            if val[-1] == 'c' or len(val) == 3:
                 new_state.set(x, y, '#')
-        if state.get(x, y)[-1] == 's':
-            pass
         return new_state
     def is_trapped(self, x, y, tile):
         if tile == '^' and self.trapsU[y][x] or \
@@ -160,20 +218,11 @@ class AbridgeSolver(Solver):
 
 def from_strs(strs):
     map = {'+':'^c', '-':'vc', '}':'>c', '{':'<c', 'b':'Bc', 'y':'Yc',
-           'U':'^s', 'D':'vs', 'R':'>s', 'L':'<s', 'W':'Bs', 'S':'Ys', 'F':'Os'}
+           'U':'^s', 'D':'vs', 'R':'>s', 'L':'<s', 'W':'Bs', 'S':'Ys', 'F':'Os',
+           'l':'<cs', 'r':'>cs', 'w':'Bcs', 's':'Ycs'}
     return [[map.get(c) or c for c in s] for s in strs]
 
 #############################################################################
-
-puzzle_a_little_extra = [ #Testing
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#','#',' ','#','#',' ',' ','*','#'],
-    ['#',' ','*',' ','#',' ',' ','#','#'],
-    ['#','U','S',' ','#','X','S','U','#'],
-    ['#',' ','#',' ','#',' ','#',' ','#'],
-    ['#',' ','F',' ','#',' ','F',' ','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
 
 puzzle_misdirection = from_strs([ #Testing
 '#########',
@@ -188,23 +237,6 @@ puzzle_misdirection = from_strs([ #Testing
 ])
 
 
-puzzle_jumble = [ #Testing
-    ['#','#','#','#','#','#','#'],
-    ['#','#','*','>',' ','#','#'],
-    ['#','X','O','>','#','#','#'],
-    ['#','X',' ',' ','B','Y','#'],
-    ['#','#','#','#','#','#','#'],
-]
-
-puzzle_testsym = [ #Testing
-    ['#','#','#','#','#','#','#','#','#'],
-    ['#','*','#','*','^',' ','#','*','#'],
-    ['#',' ','#',' ','#',' ','#',' ','#'],
-    ['#',' ','#','D',' ',' ','#',' ','#'],
-    ['#','W','#','W','#','#','#','U','#'],
-    ['#','#','#','#','#','#','#','#','#'],
-]
-
 puzzle_test = [
     ['#','#','#','#','#','#','#'],
     ['#',' ',' ','v',' ',' ','#'],
@@ -214,16 +246,22 @@ puzzle_test = [
     ['#','#','#','#','#','#','#'],
 ]
 
-puzzle_x = from_strs([
-'#########',
-'#O ###  #',
-'##^<Y^>>#',
-'## #*#  #',
-'#######B#',
-'#########',
+puzzle = from_strs([
+'################',
+'## ## #####   ##',
+'#     ##### * ##',
+'## ##    ##   X#',
+'#  ##### ####  #',
+'## ###   ## XX #',
+'## ##  #### ####',
+'#O ###      ####',
+'#O B###v########',
+'#XY### X #######',
+'################',
 ])
 
-AbridgeSolver().solve_optimal(puzzle_x, debug=0, use_score=0, optimize_score=1)
+AbridgeSolver().solve(puzzle, debug=0, use_score=0, optimize_score=1,
+                      approximate=1, approx_factor=10, max_depth=186)
 
 puzzle_blank = from_strs([
 '#######',
