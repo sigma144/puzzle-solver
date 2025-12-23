@@ -1,4 +1,4 @@
-import time, psutil, pickle
+import time, psutil, pickle, math
 from dataclasses import dataclass
 from collections import deque
 
@@ -187,7 +187,7 @@ class Solver:
     def approximate(self, state): return 0 #(Optional) Estimate distance to solution
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver = None
-    def solve(self, puzzle, debug=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, **kwargs):
+    def solve(self, puzzle, debug=0, refine=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, **kwargs):
         start_time = time.time()
         Catalog.init()
         Solver.solver = self
@@ -201,7 +201,7 @@ class Solver:
             approx_auto = True
         if debug:
             try:
-                return self.debug(use_score)
+                return self.debug(use_score, refine)
             except FileNotFoundError as e:
                 print("Exception thrown while solving!")
                 print(repr(e))
@@ -219,7 +219,7 @@ class Solver:
         depth_last = 0
         depth_size = 0
         depth_start = 0
-        if max_depth == 0: max_depth = 999999999
+        if max_depth == 0: max_depth = math.inf
         def finish_solve(state):
             state._write = {i for i in range(len(state._grid))}
             state.pack()
@@ -235,25 +235,25 @@ class Solver:
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-            self.replay_moves(moves, names)
-            del self._prev_states, self._state_queue, self._next_queue
+            self.display_solution(moves, names)
             return moves
         try:
             if use_score:
-                self._prev_states = {starting_state: starting_state}
-                self._state_queue = deque()
-                self._state_queue.append(starting_state)
-                self._next_queue = {(0, 0): self._state_queue}
-                self._depth = (0, 0)
+                prev_states = {starting_state: starting_state}
+                state_queue = deque()
+                state_queue.append(starting_state)
+                next_queue = {(0, 0): state_queue}
+                depth = (0, 0)
                 start_approx = 0
                 if approximate:
                     start_approx = self.approximate(starting_state) * approx_factor
                 starting_state._score = (0, 0)
                 while True:
                     count_iterate += 1
-                    state = self._state_queue.pop()
-                    if state._score is not None:
-                        del state._score
+                    state = state_queue.pop()
+                    score = state._score
+                    del state._score
+                    if score is not None:
                         state.unpack()
                         old_approx = self.approximate(state) * approx_factor
                         if self.check_finish(state):
@@ -265,9 +265,9 @@ class Solver:
                             s.previous = state
                             if not self.check_valid(s): continue
                             if optimize_score:
-                                score = (self._depth[0] + s._score, self._depth[1] + 1)
+                                score = (depth[0] + s._score, depth[1] + 1)
                             else:
-                                score = (self._depth[0] + 1, self._depth[1] + s._score)
+                                score = (depth[0] + 1, depth[1] + s._score)
                             if approximate:
                                 if not approx_auto and score[0] + start_approx - old_approx > max_depth:
                                     continue
@@ -276,55 +276,55 @@ class Solver:
                                 continue
                             s._score = score
                             s.pack()
-                            if self._prev_states.setdefault(s, s) is s:
-                                self._next_queue.setdefault(score, deque()).appendleft(s)
-                                if score[0] == self._depth[0]:
+                            if prev_states.setdefault(s, s) is s:
+                                next_queue.setdefault(score, deque()).appendleft(s)
+                                if score[0] == depth[0]:
                                     depth_size += 1
                             else:
-                                existing_state = self._prev_states[s]
+                                existing_state = prev_states[s]
                                 if score < getattr(existing_state, '_score', (-1, -1)):
                                     existing_state._score = None
-                                    self._prev_states[s] = s
-                                    self._next_queue.setdefault(score, deque()).appendleft(s)
-                                    if score[0] == self._depth[0]:
+                                    prev_states[s] = s
+                                    next_queue.setdefault(score, deque()).appendleft(s)
+                                    if score[0] == depth[0]:
                                         depth_size += 1
                         if count_iterate % 50000 == 0:
                             memuse = int(psutil.virtual_memory()[2])
                             print(state)
-                            print("Depth "+str(self._depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
+                            print("Depth "+str(depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
                         del state._temp, state._readonly
-                    if len(self._state_queue) == 0:
-                        #self._prev_states = set()
-                        del self._next_queue[self._depth]
-                        if len(self._next_queue) == 0: break #No solution found
-                        least_score = min(self._next_queue.keys())
-                        self._state_queue = self._next_queue[least_score]
-                        if self._depth[0] != least_score[0]:
-                            self._depth = least_score
-                            depth_size = sum({len(q) for sc, q in self._next_queue.items() if sc[0] == least_score[0]})
+                    if len(state_queue) == 0:
+                        #prev_states = set()
+                        del next_queue[depth]
+                        if len(next_queue) == 0: break #No solution found
+                        least_score = min(next_queue.keys())
+                        state_queue = next_queue[least_score]
+                        if depth[0] != least_score[0]:
+                            depth = least_score
+                            depth_size = sum({len(q) for sc, q in next_queue.items() if sc[0] == least_score[0]})
                             depth_start = count_iterate
                             elapsed = time.time() - depth_time
                             time_diff = elapsed - depth_last
                             depth_last = elapsed
                             depth_time = time.time()
                             if not approximate:
-                                print("Depth "+str(self._depth[0])+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
+                                print("Depth "+str(depth[0])+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
                                     +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                                     +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
                             if approx_auto:
-                                if self._depth[0] < 0 and approx_factor > 1:
+                                if depth[0] < 0 and approx_factor > 1:
                                     approx_factor -= 1
-                                elif self._depth[0] > 10 and approx_factor < 10:
+                                elif depth[0] > 10 and approx_factor < 10:
                                     approx_factor += 1
-                        self._depth = least_score
+                        depth = least_score
             else:
-                self._prev_states = {starting_state}   
-                self._state_queue = [starting_state]
-                self._next_queue = deque()
-                self._depth = 0
+                prev_states = {starting_state}   
+                state_queue = [starting_state]
+                next_queue = deque()
+                depth = 0
                 while True:
                     count_iterate += 1
-                    state = self._state_queue.pop()
+                    state = state_queue.pop()
                     state.unpack()
                     next = self.get_next_states(state)
                     state.repack()
@@ -335,30 +335,30 @@ class Solver:
                             del state._temp
                             del s._temp
                             return finish_solve(s)
-                        if self._depth + self.lower_bound(s) > max_depth:
+                        if depth + self.lower_bound(s) > max_depth:
                             continue
                         s.pack()
-                        if len(self._prev_states) != (self._prev_states.add(s) or len(self._prev_states)):
-                            self._next_queue.appendleft(s)
+                        if len(prev_states) != (prev_states.add(s) or len(prev_states)):
+                            next_queue.appendleft(s)
                         del s._score
                     if count_iterate % 50000 == 0:
                         memuse = int(psutil.virtual_memory()[2])
                         print(state)
-                        print("Depth "+str(self._depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
+                        print("Depth "+str(depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
                     del state._temp, state._readonly
-                    if len(self._state_queue) == 0:
-                        #self._prev_states = set()
-                        if len(self._next_queue) == 0: break #No solution found
-                        self._state_queue = self._next_queue
-                        self._next_queue = deque()
-                        self._depth += 1
-                        depth_size = len(self._state_queue)
+                    if len(state_queue) == 0:
+                        prev_states = set()
+                        if len(next_queue) == 0: break #No solution found
+                        state_queue = next_queue
+                        next_queue = deque()
+                        depth += 1
+                        depth_size = len(state_queue)
                         depth_start = count_iterate
                         elapsed = time.time() - depth_time
                         time_diff = elapsed - depth_last
                         depth_last = elapsed
                         depth_time = time.time()
-                        print("Depth "+str(self._depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
+                        print("Depth "+str(depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
                             +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                             +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
         except FileNotFoundError as e:
@@ -406,9 +406,8 @@ class Solver:
             for m in moves:
                 m._write = {i for i in range(len(m._grid))}
                 m.pack()
-                del m._temp
         return moves, names
-    def replay_moves(self, moves, names, diff=1, diff_trail=0):
+    def display_solution(self, moves, names, diff=1, diff_trail=0):
         if not diff:
             for m in moves:
                 print(m)
@@ -429,7 +428,7 @@ class Solver:
             print(newstr)
         print(Solver._green + f'Puzzle solved!' + Solver._black)
         print(' '.join(names))
-    def debug(self, use_score=0):
+    def debug(self, use_score=0, refine=0):
         prev_moves = []
         state = self.setup(self._puzzle)
         state.previous = None
@@ -452,7 +451,10 @@ class Solver:
                 if use_score:
                     score = sum(s._score for s in moves[1:])
                     print(Solver._green + f'Score: ' + str(score) + Solver._black)
-                self.replay_moves(moves, prev_moves)
+                if refine:
+                    self.refine_solution(moves)
+                    return
+                self.display_solution(moves, prev_moves)
                 return
             move = None
             while move not in moves:
@@ -475,6 +477,95 @@ class Solver:
                 prev_moves.append(move)
                 state = moves[move]
             state.unpack()
+    def refine_solution(self, solution, optimize_score=False): #WIP
+        print('Refining solution...')
+        queues = {}
+        prev_states = {}
+        depth = (0, 0)
+        solution[0]._score = 0
+        for i, s in enumerate(solution):
+            s.previous = solution[i-1] if i > 0 else None
+            queues[s] = {depth: deque()}
+            queues[s][depth].appendleft(s)
+            print(s)
+            print(s._score)
+            print(depth)
+            prev_states[s] = depth
+            if optimize_score:
+                depth = (depth[0] + s._score, depth[1] + 1)
+            else:
+                depth = (depth[0] + 1, depth[1] + s._score)
+        solution_states = {s: prev_states[s] for s in solution}
+        max_depth = solution_states[solution[-1]]
+        loops = 0
+        iterations = 0
+        while True:
+            loops += 1
+            print('Loops:', loops)
+            queues = {k: v for k, v in queues.items() if v}
+            if not queues:
+                print('Optimization complete!')
+                return
+            for st, next_queue in queues.items():
+                depth = min(next_queue.keys())
+                state_queue = next_queue[depth]
+                while state_queue:
+                    iterations += 1
+                    state = state_queue.pop()
+                    score = state._score
+                    del state._score
+                    if score is None:
+                        del state._temp#, state._readonly
+                        continue
+                    state.unpack()
+                    next = self.get_next_states(state)
+                    state.repack()
+                    for _, s in next.items():
+                        s.previous = state
+                        if not self.check_valid(s): continue
+                        s.pack()
+                        if optimize_score:
+                            score = (depth[0] + s._score, depth[1] + 1)
+                        else:
+                            score = (depth[0] + 1, depth[1] + s._score)
+                        if (score[0] + self.lower_bound(s), score[1]) > max_depth:
+                            continue
+                        if s in solution_states and score < solution_states[s] or \
+                            self.check_finish(s) and score < max_depth:
+                            segment = [s]
+                            while segment[0] != st:
+                                segment.insert(0, segment[0].previous)
+                            i_s = solution.index(s)
+                            i_st = solution.index(st)
+                            solution = solution[:i_st] + segment + solution[i_s+1:]
+                            solution[i_s+1].previous = segment[-1]
+                            solution_states = {s: prev_states[s] for s in solution}
+                            for s2 in solution[1:-1]:
+                                queues[s2].clear()
+                            max_depth = solution_states[solution[-1]]
+                            print('Solution improved!')
+                            _, names = self.trace_moves(solution[-1])
+                            print(' '.join(names))
+                            if optimize_score:
+                                print(f'Score: {max_depth[0]}, Moves: {max_depth[1]}')
+                            else:
+                                print(f'Moves: {max_depth[0]}, Score: {max_depth[1]}')
+                            input('Continue? ')
+                        #s.pack()
+                        if s in prev_states:
+                            for ques in queues.values():
+                                for que in ques.values():
+                                    for s2 in que:
+                                        while s2 is not None:
+                                            if s2 == s:
+                                                s2._score = None
+                                                break
+                                            s2 = s2.previous
+                        else:
+                            next_queue.setdefault(score, deque()).appendleft(s)
+                        prev_states[s] = score
+                    del state._temp, state._readonly
+                del next_queue[depth]
     
 @dataclass
 class Vec2:
