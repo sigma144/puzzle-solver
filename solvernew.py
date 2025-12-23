@@ -239,7 +239,7 @@ class Solver:
             return moves
         try:
             if use_score:
-                prev_states = {starting_state: starting_state}
+                prev_states = set()
                 state_queue = deque()
                 state_queue.append(starting_state)
                 next_queue = {(0, 0): state_queue}
@@ -249,11 +249,9 @@ class Solver:
                     start_approx = self.approximate(starting_state) * approx_factor
                 starting_state._score = (0, 0)
                 while True:
-                    count_iterate += 1
                     state = state_queue.pop()
-                    score = state._score
-                    del state._score
-                    if score is not None:
+                    if len(prev_states) != (prev_states.add(state) or len(prev_states)):
+                        count_iterate += 1
                         state.unpack()
                         old_approx = self.approximate(state) * approx_factor
                         if self.check_finish(state):
@@ -274,20 +272,12 @@ class Solver:
                                 score = (score[0] - old_approx + self.approximate(s) * approx_factor, score[1])
                             elif score[0] + self.lower_bound(s) > max_depth:
                                 continue
-                            s._score = score
                             s.pack()
-                            if prev_states.setdefault(s, s) is s:
+                            if s not in prev_states:
                                 next_queue.setdefault(score, deque()).appendleft(s)
                                 if score[0] == depth[0]:
                                     depth_size += 1
-                            else:
-                                existing_state = prev_states[s]
-                                if score < getattr(existing_state, '_score', (-1, -1)):
-                                    existing_state._score = None
-                                    prev_states[s] = s
-                                    next_queue.setdefault(score, deque()).appendleft(s)
-                                    if score[0] == depth[0]:
-                                        depth_size += 1
+                                del s._score
                         if count_iterate % 50000 == 0:
                             memuse = int(psutil.virtual_memory()[2])
                             print(state)
