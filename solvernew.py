@@ -187,7 +187,7 @@ class Solver:
     def approximate(self, state): return 0 #(Optional) Estimate distance to solution
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver = None
-    def solve(self, puzzle, debug=0, refine=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, **kwargs):
+    def solve(self, puzzle, debug=0, refine=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, max_ram=95, **kwargs):
         start_time = time.time()
         Catalog.init()
         Solver.solver = self
@@ -220,6 +220,8 @@ class Solver:
         depth_size = 0
         depth_start = 0
         if max_depth == 0: max_depth = math.inf
+        purge_bound = self.approximate(starting_state)
+        next_purge = 500000
         def finish_solve(state):
             state._write = {i for i in range(len(state._grid))}
             state.pack()
@@ -228,7 +230,7 @@ class Solver:
             print(' '.join(names))
             score = sum([s._score for s in moves[1:]])
             if optimize_score:
-                print("Solved with score", str(score)+"!", '(Approximated)' if approximate else '')
+                print("Solved with score", str(score)+"!", '(Approximated)' if approximate or next_purge > 500000 else '')
                 print("Moves:", len(moves)-1)
             else:
                 print("Solved in", len(moves)-1, "moves!")
@@ -237,6 +239,25 @@ class Solver:
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
             self.display_solution(moves, names)
             return moves
+        def tighten_bound():
+            print(Solver._red + "High RAM use, tightening bound..." + Solver._black)
+            nonlocal prev_states, next_queue, next_purge, purge_bound, depth_size
+            next_bound = 0
+            prev_states.clear()
+            for que in next_queue.values():
+                for _ in range(len(que)):
+                    s = que.pop()
+                    s.unpack()
+                    dist = self.approximate(s)
+                    if dist < purge_bound:
+                        next_bound = max(next_bound, dist)
+                        que.appendleft(s)
+                    s.repack()
+                    prev_states.add(s.previous)
+            next_queue = {k:v for k,v in next_queue.items() if v}
+            next_purge = count_iterate + 500000
+            purge_bound = next_bound
+            depth_size = sum({len(q) for sc, q in next_queue.items() if sc[0] == depth[0]})
         try:
             if use_score:
                 prev_states = set()
@@ -272,6 +293,8 @@ class Solver:
                                 score = (score[0] - old_approx + self.approximate(s) * approx_factor, score[1])
                             elif score[0] + self.lower_bound(s) > max_depth:
                                 continue
+                            elif next_purge and self.approximate(s) > purge_bound:
+                                continue
                             s.pack()
                             if s not in prev_states:
                                 next_queue.setdefault(score, deque()).appendleft(s)
@@ -282,10 +305,13 @@ class Solver:
                             memuse = int(psutil.virtual_memory()[2])
                             print(state)
                             print("Depth "+str(depth[0])+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
+                            if memuse > max_ram and purge_bound and count_iterate >= next_purge:
+                                tighten_bound()
                         del state._temp, state._readonly
                     if len(state_queue) == 0:
                         #prev_states = set()
-                        del next_queue[depth]
+                        if depth in next_queue:
+                            del next_queue[depth]
                         if len(next_queue) == 0: break #No solution found
                         least_score = min(next_queue.keys())
                         state_queue = next_queue[least_score]
@@ -327,6 +353,8 @@ class Solver:
                             return finish_solve(s)
                         if depth + self.lower_bound(s) > max_depth:
                             continue
+                        elif next_purge and self.approximate(s) > purge_bound:
+                            continue
                         s.pack()
                         if len(prev_states) != (prev_states.add(s) or len(prev_states)):
                             next_queue.appendleft(s)
@@ -335,6 +363,8 @@ class Solver:
                         memuse = int(psutil.virtual_memory()[2])
                         print(state)
                         print("Depth "+str(depth)+": " + str(int((count_iterate-depth_start)/depth_size*100)) + "%,", str(count_iterate // 1000) + "k states checked, total time {:.2f}s".format(time.time() - start_time) + ',', f'RAM {memuse}%,', "catalog size " + str(len(Catalog.catalog)))
+                        if memuse > max_ram and purge_bound and count_iterate >= next_purge:
+                            tighten_bound()
                     del state._temp, state._readonly
                     if len(state_queue) == 0:
                         prev_states = set()
@@ -351,20 +381,22 @@ class Solver:
                         print("Depth "+str(depth)+': '+str(count_iterate)+' iterations, {:.2f}s, '.format(time.time()-start_time) \
                             +"depth time {:.2f}".format(elapsed)+'s '+(Solver._green if time_diff<0 else Solver._red) \
                             +'('+('+' if time_diff>=0 else '')+'{:.2f}s)'.format(time_diff)+Solver._black)
-        except FileNotFoundError as e:
-            try:
-                Catalog.pack(state)
-                _, names = self.trace_moves(state)
-                print(state)
-                print(' '.join(names))
-            except:
-                print('<Tracing moves failed>')
-            print("Exception thrown while solving!")
-            print(repr(e))
-            raise e
         except KeyboardInterrupt:
             print('Solve terminated.')
             return []
+        except Exception as e:
+            try:
+                state._write = set()
+                state.pack()
+                _, names = self.trace_moves(state)
+                print(state)
+                print(' '.join(names))
+            except Exception as e2:
+                print('<Tracing moves failed>')
+                print(e2)
+            print("Exception thrown while solving!")
+            print(repr(e))
+            raise e
         print("No solution exists.")
         elapsed = time.time() - start_time
         print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
