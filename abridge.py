@@ -7,15 +7,24 @@ class AbridgeSolver(Solver):
         self.open_tiles = []
         state.set_temp('tiles', 0)
         state.set_temp('circles', 0)
+        sym = False
+        self.exits = []
         for x, y in state.all_points():
             val = state.get(x, y)
-            if val in '#*':
+            if val == '#':
+                continue
+            if val == '*':
+                self.exits.append((x, y))
                 continue
             self.open_tiles.append((x, y))
             if val != ' ':
                 state.inc_temp('tiles')
             if val[0] == 'O':
                 state.inc_temp('circles')
+            if 's' in val:
+                sym = True
+        if sym and len(self.exits) > 1:
+            self.lower_bound = self.lower_bound_sym
         if state.get_temp('circles') == 0:
             state.del_temp('circles')
         self.detect_traps(state)
@@ -94,8 +103,10 @@ class AbridgeSolver(Solver):
         return state.get_temp('tiles') == 0
     def lower_bound(self, state):
         return state.get_temp('tiles')
+    def lower_bound_sym(self, state):
+        return state.get_temp('tiles') // 2
     def approximate(self, state):
-        return state.get_temp('tiles')
+        return state.get_temp('tiles')# + 0 if state.get_temp('circles') else 3
     def push(self, state, x, y, dx, dy):
         nextx, nexty = x+dx, y+dy
         val, nextval = state.get(x, y), state.get(nextx, nexty)
@@ -132,20 +143,20 @@ class AbridgeSolver(Solver):
         new_state.del_temp('click')
         val = state.get(x, y)
         if symcircle and state.get_temp('sym') is not None:
-            if not self.push(new_state, x, y, dx, dy):
-                return None
             sx, sy = state.get_temp('sym')
-            if x == sx and y == sy:
-                self.push(new_state, x-dx, y-dy, dx, dy)
-            elif (x+dx+dx != sx or y+dy+dy != sy) and state.get(sx, sy) == new_state.get(sx, sy):
-                if state.get(sx-dx-dx, sy-dy-dy) == state.get(x+dx, y+dy):
-                    if not self.push(new_state, sx, sy, dx, dy):
-                        return None
-                elif not self.push(new_state, sx-dx, sy-dy, dx, dy):
+            sx -= dx; sy -= dy
+            if dx < 0 and x < sx or dy < 0 and y < sy or dx > 0 and x > sx or dy > 0 and y > sy:
+                x1 = x; x2 = sx; y1 = y; y2 = sy
+            else:
+                x1 = sx; x2 = x; y1 = sy; y2 = y
+            if not self.push(new_state, x1, y1, dx, dy):
+                return None
+            if not (x1-dx == x2 and y1-dy == y2 and new_state.get(x2, y2) in '#*'):
+                if not self.push(new_state, x2, y2, dx, dy):
                     return None
-            if state.get(sx+dx, sy+dy) == '*':
+            if state.get(sx+dx+dx, sy+dy+dy) == '*':
                 new_state.del_temp('sym')
-            else: new_state.set_temp('sym', (sx+dx, sy+dy))
+            else: new_state.set_temp('sym', (sx+dx+dx, sy+dy+dy))
         elif not circle and val[-1] == 's' and state.get_temp('sym') is not None:
             if not self.push(new_state, x, y, dx, dy):
                 return None
@@ -218,6 +229,19 @@ class AbridgeSolver(Solver):
             self.trapsR[y][x] = not self.can_escape(state, x, y, -1, 0, diagonal)
             self.trapsU[y][x] = not self.can_escape(state, x, y, 0, 1, diagonal)
             self.trapsD[y][x] = not self.can_escape(state, x, y, 0, -1, diagonal)
+    def check_valid(self, state):
+        return True #Below code is for Doubles puzzle only
+        if state.get(3, 5) in '^<' and state.get(1, 5) == ' ' and state.get(2, 5) == ' ': return False
+        if state.get(2, 5) == 'v' and state.get(1, 5) == ' ': return False
+        if state.get(10, 2) in '^>' and state.get(11, 2) == ' ' and state.get(12, 2) == ' ' and state.get(13, 2) == ' ':
+            if state.get(10, 3) == 'v' and state.get(11, 3) == 'v': return False
+        if state.get(11, 2) in '^>' and state.get(12, 2) == ' ' and state.get(13, 2) == ' ': return False
+        if state.get(12, 2) == 'v' and state.get(13, 2) == ' ': return False
+        if state.get(10, 4) in 'v>' and state.get(11, 3) == 'v' and state.get(11, 4) == ' ': return False
+        if state.get(9, 4) in 'v>' and state.get(10, 3) == 'v' and state.get(11, 3) == 'v':
+            if state.get(10, 4) == ' ' and state.get(11, 4) == ' ': return False
+        if state.get(3, 3) in 'v<' and state.get(2, 3) == ' ' and state.get(1, 3) == ' ': return False
+        return True
 
 def from_strs(strs):
     map = {'+':'^c', '-':'vc', '}':'>c', '{':'<c', 'b':'Bc', 'y':'Yc',
@@ -250,17 +274,19 @@ puzzle_test = [
 ]
 
 puzzle = from_strs([
-'#######',
-'#>>X ##',
-'# #^  #',
-'# O#X #',
-'# # *##',
-'#YX   #',
-'#######',
+'#########',
+'#   *   #',
+'#XX##X#X#',
+'#       #',
+'#       #',
+'#       #',
+'# FW FW #',
+'# SU SU #',
+'#########',
 ])
 
-AbridgeSolver().solve(puzzle, debug=0, use_score=0, optimize_score=1,
-                      approximate=0, approx_factor=20, max_depth=86)
+AbridgeSolver().solve(puzzle, debug=0, refine=0, use_score=1, optimize_score=1,
+                      approximate=0, approx_factor=4, max_depth=70)
 
 puzzle_blank = from_strs([
 '#######',
