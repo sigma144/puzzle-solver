@@ -1,6 +1,7 @@
 import time, psutil, pickle, math
 from dataclasses import dataclass
 from collections import deque
+import msvcrt
 
 class Catalog:
     catalog = used = None
@@ -78,7 +79,7 @@ class GridState:
         del self._packed
     def get(self, x, y):
         if y < 0 or x < 0 or y >= len(self._grid) or x >= len(self._grid[y]):
-            return None
+            return ''
         return self._grid[y][x]
     def set(self, x, y, val):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
@@ -222,6 +223,7 @@ class Solver:
         if max_depth == 0: max_depth = math.inf
         purge_bound = self.approximate(starting_state)
         next_purge = 500000
+        runtime_checks = []
         def finish_solve(state):
             state._write = {i for i in range(len(state._grid))}
             state.pack()
@@ -244,6 +246,7 @@ class Solver:
             nonlocal prev_states, next_queue, next_purge, purge_bound, depth_size
             next_bound = 0
             prev_states.clear()
+            depth_remain = depth_start - count_iterate + depth_size
             for que in next_queue.values():
                 for _ in range(len(que)):
                     s = que.pop()
@@ -257,7 +260,51 @@ class Solver:
             next_queue = {k:v for k,v in next_queue.items() if v}
             next_purge = count_iterate + 500000
             purge_bound = next_bound
-            depth_size = sum({len(q) for sc, q in next_queue.items() if sc[0] == depth[0]})
+            depth_size -= depth_remain
+            depth_size += sum({len(q) for sc, q in next_queue.items() if sc[0] == depth[0]})
+        def get_custom_check(s):
+            nonlocal prev_states, next_queue, depth_size, runtime_checks
+            char = msvcrt.getch()
+            if char != 'c': return
+            while True:
+                check = input('Input custom check: ')
+                if not check: return
+                try:
+                    eval(check)
+                    break
+                except Exception as e:
+                    print('Eval failed:', e)
+            print('Applying...')
+            runtime_checks.append(check)
+            depth_remain = depth_start - count_iterate + depth_size
+            for que in next_queue.values():
+                for _ in range(len(que)):
+                    s = que.pop()
+                    s.unpack()
+                    try:
+                        if eval(check):
+                            que.appendleft(s)
+                    except: que.appendleft(s)
+                    s.repack()
+            new_states = set()
+            while prev_states:
+                s = prev_states.pop()
+                try:
+                    if eval(check):
+                        new_states.add(s)
+                except: new_states.add(s)
+            prev_states = new_states
+            next_queue = {k:v for k,v in next_queue.items() if v}
+            depth_size -= depth_remain
+            depth_size += sum({len(q) for sc, q in next_queue.items() if sc[0] == depth[0]})
+        def check_runtime(s):
+            nonlocal runtime_checks
+            for check in runtime_checks:
+                try:
+                    if not eval(check):
+                        return False
+                except: pass
+            return True
         try:
             if use_score:
                 prev_states = set()
@@ -270,6 +317,7 @@ class Solver:
                     start_approx = self.approximate(starting_state) * approx_factor
                 starting_state._score = (0, 0)
                 while True:
+                    #get_custom_check(starting_state)
                     state = state_queue.pop()
                     if len(prev_states) != (prev_states.add(state) or len(prev_states)):
                         count_iterate += 1
@@ -283,6 +331,7 @@ class Solver:
                         for _, s in next.items():
                             s.previous = state
                             if not self.check_valid(s): continue
+                            #if runtime_checks and check_runtime(s): continue
                             if optimize_score:
                                 score = (depth[0] + s._score, depth[1] + 1)
                             else:
@@ -308,6 +357,7 @@ class Solver:
                             if memuse > max_ram and purge_bound and count_iterate >= next_purge:
                                 tighten_bound()
                         del state._temp, state._readonly
+                    else: depth_size -= 1
                     if len(state_queue) == 0:
                         #prev_states = set()
                         if depth in next_queue:
@@ -339,6 +389,7 @@ class Solver:
                 next_queue = deque()
                 depth = 0
                 while True:
+                    #get_custom_check(starting_state)
                     count_iterate += 1
                     state = state_queue.pop()
                     state.unpack()
@@ -347,6 +398,7 @@ class Solver:
                     for _, s in next.items():
                         s.previous = state
                         if not self.check_valid(s): continue
+                        #if runtime_checks and check_runtime(s): continue
                         if self.check_finish(s):
                             del state._temp
                             del s._temp
@@ -454,8 +506,10 @@ class Solver:
         prev_moves = []
         state = self.setup(self._puzzle)
         state.previous = None
+        state.pack()
         move_input = None
         while True:
+            state.unpack()
             finished = self.check_finish(state)
             if finished: moves = {}
             else: moves = self.get_next_states(state)
@@ -498,7 +552,6 @@ class Solver:
             if move:
                 prev_moves.append(move)
                 state = moves[move]
-            state.unpack()
     def refine_solution(self, solution, optimize_score=False): #WIP
         print('Refining solution...')
         queues = {}
