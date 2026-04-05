@@ -144,7 +144,7 @@ class GridState:
         self._vars = Catalog.get(self._vars).copy()
         self._vars[var] = val
         self._vars = Catalog.sadd(self._vars)
-    def del_temp(self, var):
+    def del_var(self, var):
         if hasattr(self, '_readonly'): raise Exception('State is read only')
         self._vars = Catalog.get(self._vars).copy()
         del self._vars[var]
@@ -419,7 +419,7 @@ class Solver:
                             tighten_bound()
                     del state._temp, state._readonly
                     if len(state_queue) == 0:
-                        prev_states = set()
+                        #prev_states = set()
                         if len(next_queue) == 0: break #No solution found
                         state_queue = next_queue
                         next_queue = deque()
