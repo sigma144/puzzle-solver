@@ -12,14 +12,10 @@ class LockpickState:
         self.last_access = None
         self.master = []
         self.win = False
-        self.terminate = False
         self.iview = False
         self.iviewmoves = []
         self.salvage = {}
         self.gates = []
-        self.gates_passed = 0
-        self.multiplicity = 1
-        self.level_num = None
         self.score = None
     def __eq__(self, state):
         if self.stock != state.stock or self.salvage != state.salvage or self.gates != state.gates or self.access != state.access or self.win != state.win:
@@ -31,8 +27,8 @@ class LockpickState:
     #    if self.last_move != state.last_move or self.last_access != state.last_access or self.stock != state.stock or self.salvage != state.salvage or self.gates != state.gates or self.access != state.access or self.win != state.win:
     #        return False
     #    return self.edges == state.edges
-    #def __hash__(self):
-    #    return hash(pickle.dumps((self.last_move, self.last_access, self.stock, self.edges, sorted([(k, v) for k, v in self.salvage.items()]), sorted(list(self.access)), self.gates), -1))
+    def __hash__(self):
+        return hash(pickle.dumps((self.last_move, self.last_access, self.stock, self.edges, sorted([(k, v) for k, v in self.salvage.items()]), sorted(list(self.access)), self.gates), -1))
     def __repr__(self) -> str:
         s = 'Access:' + str(self.access) + '\n'
         s += 'Stock:' + str(Catalog.get(self.stock)) + '\n'
@@ -51,11 +47,9 @@ class LockpickState:
         s.last_access = back
         s.master = self.master
         s.iviewmoves = self.iviewmoves
-        #s.previous = self.previous
         s.salvage = self.salvage
         s.gates = self.gates
-        s.level_num = self.level_num
-        s.multiplicity = self.multiplicity
+        if hasattr(self, "level_num"): s.level_num = self.level_num
         return s
     def edge(self, i):
         return Catalog.get(self.edges[i])
@@ -250,7 +244,7 @@ class LockpickState:
     def unlock(self, i, back=0, iview=False, door=None):
         state = self.copy(i, back)
         state.iview = iview
-        if self.last_move != i or self.last_access != back or self.terminate:
+        if self.last_move != i or self.last_access != back or hasattr(self, "terminate"):
             state.master = []
             state.iviewmoves = []
         next_states = []
@@ -328,7 +322,7 @@ class LockpickState:
                     state.edges[i-1] = Catalog.sadd(seq2)
         #Specials
         if color == '$':
-            if state.level_num is not None or isinstance(Solver.solver.salvage, tuple):
+            if hasattr(state, "level_num") or isinstance(Solver.solver.salvage, tuple):
                 return []
             for e in state.edges:
                 if ('', '^', '') in Catalog.get(e):
@@ -528,11 +522,11 @@ def test(full=False, print_moves=False, salvages=True):
     tests = [
         p11, p21, p31, p41, p51,      p71, p81, p91, p101, p111,                   p121,
         p12, p22,      p42, p52, p62, p72, p82, p92, p102,                   pt42, p122,
-        p13, p23, p33, p43,      p63, p73, p83,      p103, p113, pt13,       pt43, 
-        p14, p24, p34, p44, p54, p64, p74, p84, p94, p104, p114,       pt24, 
+        p13, p23, p33, p43, p53, p63, p73, p83,      p103, p113, pt13,       pt43, 
+        p14, p24, p34, p44, p52x,p64, p74, p84, p94, p104, p114,       pt24, 
         p15, p25, p35, p45, p55, p65, p75, p85, p95, p105, p115, pt15, pt25, 
         p16, p26, p36, p46, p56, p66, p76, p86, p96, p106, p116, pt16,       pt36,
-        p17, p27, p37, p47, p57, p67,                p107, p117,       pt27,
+        p17, p27,      p47, p57, p67,                p107, p117,       pt27,
         p18, p28, p38,           p68, p78,           p108, p118,             pt4W,
         p19, p29,                p69,                                        pt4L,
              p210,                    p710,                p1110,
@@ -540,14 +534,15 @@ def test(full=False, print_moves=False, salvages=True):
              p2B, p3B, p4B,      p6B, p7B, p8B,            p11B,
         p1C, p2C,                p6C, p7C,
              p2D,                               p9F]
-    extests = [p112, p53, p77, p87, p119, p110, p610,
+    extests = [p112, p37, p54, p77, p87, p119, p110, p610,
         p5A, p7A, p8A, p1B, p5B, p9B, p10B, p3D, p7D, p9D, p7E]
         #Exclude 32, 3C, 48, 4C, 61, 79, 93, 9C, 109, 1010, 11A
-    salvagetests = [pt13, pt15, pt17, pt25, pt27, pt32, pt34, pt42, pt43, #pt31, 
-        #pomegaO, pomegaK, pomegaL, pomegaG, pomegaB,
-        ]
+    salvagetests = [pt13, pt15, pt17, pt25, pt27, pt32, pt34, pt42, pt43]
+    salvageex = [pt31, pomegaO, pomegaK, pomegaL, pomegaG, pomegaB]
     if full: tests = extests + tests
-    if salvages: tests = salvagetests
+    if salvages:
+        tests = salvagetests
+        if full: tests = salvageex + salvagetests
     start_time = time.time()
     for i, puzzle in enumerate(tests):
         if full and i == len(extests):
@@ -558,7 +553,7 @@ def test(full=False, print_moves=False, salvages=True):
         if len(sol)-1 != puzzle.target_moves:
             print('\033[91m')
             solver.print_moves(sol)
-            print('Solve Failed, test terminated\033[00m')
+            print('Test ' + str(i+1)+'/'+str(len(tests)) + ' Failed, terminating\033[00m')
             return
     elapsed = time.time() - start_time
     print("\033[92mAll Tests Passed in {:.2f} seconds.\033[00m".format(elapsed))
@@ -567,29 +562,29 @@ class LockpickSolver(Solver):
     def get_next_states(self, state):
         next_states = []
         if state.win == 'Salvage':
-            if state.level_num is not None:
+            if hasattr(state, "level_num"):
                 for i in range(state.level_num + 1, len(self.salvage_from)):
                     s = self.init_level(self.salvage_from[i], state.salvage)
                     s.level_num = i
                     s.win = 'Enter'
                     next_states.append(s)
             state = self.init_level(self.parent_level, state.salvage)
-            state.level_num = None
+            if hasattr(state, "level_num"): del state.level_num
         for i, (start, end) in enumerate(self.edges):
             if state.win == 'Open copy' and i != state.last_move: continue
             access = []
             if start in state.access: access.append(0)
             if end in state.access: access.append(-1)
-            if state.terminate and i == state.last_move and state.last_access not in access:
+            if i == state.last_move and state.last_access not in access and hasattr(state, "terminate"):
                 access.append(state.last_access) #Allow additional moves on edge after one way drop
             for a in access:
-                if i == state.last_move and a == state.last_access and not state.terminate:
+                if i == state.last_move and a == state.last_access and not hasattr(state, "terminate"):
                     continue
                 states = state.unlock(i, back=a)
                 i2 = 0
                 while i2 < len(states):
                     s = states[i2]
-                    if not s.terminate:
+                    if not hasattr(s, "terminate"):
                         next = s.unlock(i, back=a)
                         states += next
                     if s.gates:
@@ -636,11 +631,11 @@ class LockpickSolver(Solver):
                 print(green + 'Enter Sublevel', m.level_num, black)
                 continue
             if pm.win == 'Salvage':
-                pm = self.init_level(self.parent_level if m.level_num is None or m.level_num < 0
+                pm = self.init_level(self.parent_level if not hasattr(m, "level_num") or m.level_num < 0
                     else self.salvage_from[m.level_num], m.salvage)
             locks = [Catalog.get(l) for l in Catalog.get(pm.edges[m.last_move])]
             next = [Catalog.get(l) for l in Catalog.get(m.edges[m.last_move])]
-            for i in range(m.gates_passed):
+            for i in range(m.gates_passed if hasattr(m, "gates_passed") else 0):
                 lock = next[i]
                 if isinstance(lock[1], list) and lock[1][0] in '-∞':
                     next = next[:i] if m.last_access else next[i+1:]
@@ -656,7 +651,7 @@ class LockpickSolver(Solver):
                     else: continue
                 if isinstance(lock[1], list):
                     if lock[1][0] in '-∞':
-                        lock = ('', '{'+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])*m.multiplicity+'}', lock[2])
+                        lock = ('', '{'+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])*(m.multiplicity if hasattr(m, "multiplicity") else 1)+'}', lock[2])
                     elif lock[1][1] and lock[1][0] == lock[1][1][0][1]:
                         lock = (lock[0], '['+''.join([l[0] + l[1] + l[2] for l in lock[1][1]])+']', lock[2])
                     else:
@@ -704,6 +699,7 @@ class LockpickSolver(Solver):
             else: print()
     def solve(self, state, salvage=False, debug=False, print_moves=True, verbose=False, showprogress=True, use_ids=False, use_score=0, optimize_score=0):
         Catalog.init()
+        self.highest = 0
         self.salvage = None
         if state.salvage and salvage:
             self.salvage = parse_locks(state, state.salvage)[0]
@@ -779,17 +775,22 @@ class LockpickSolver(Solver):
         length1 = len(Catalog.get(state.edges[state.last_move]))
         length0 = len(self.starting_edges[state.last_move][1])
         state.score = state.previous.score + abs(state.last_move - state.previous.last_move)*3 + abs(length1 - length0)
-        if state.last_move < state.previous.last_move - 1: state.score -= 1
-        if state.last_access != state.previous.last_access: state.score += 5
-        #if state.previous.previous is not None and self.edges[state.last_move][state.last_access] is not None:
-        #    if self.edges[state.last_move][state.last_access] not in state.previous.previous.access:
-        #        state.score -= abs(length1 - length0)
-        if state.last_move == state.previous.last_move and state.previous.terminate:
-            state.score = state.previous.score + 5
+        #if state.last_move < state.previous.last_move - 1: state.score -= 1
+        if state.last_access != state.previous.last_access: state.score += 2
+        if state.previous.previous is not None:
+            if self.edges[state.last_move][state.last_access] is not None:
+                if self.edges[state.last_move][state.last_access] not in state.previous.previous.access:
+                    state.score -= abs(length1 - length0)
+            else:
+                state.score += 5*abs(self.edges[state.last_move][state.last_access] - self.edges[state.previous.last_move][state.previous.last_access])
+        if state.last_move == state.previous.last_move and hasattr(state.previous, "terminate"):
+            state.score = state.previous.score + 2
         return state.score
     def check_state(self, state): #Place to add some extra logic
         prev = state.previous
         stock = Catalog.get(state.stock)
+        #if stock.get('p', 0) >= 256:
+        #    self.highest = max(self.highest, -stock.get('c', 0) + stock.get('p', 0) * 0.0001)
         prev_stock = Catalog.get(prev.stock)
         if not self.special:
             return True
@@ -805,6 +806,19 @@ class LockpickSolver(Solver):
                 if prev_stock.get('o', 0) == 0:
                     return False
         elif self.special == '5-3':
+            balance = 0
+            for edge in state.edges:
+                for lock in Catalog.get(edge):
+                    lock = Catalog.get(lock)
+                    if lock[1] == '$': continue
+                    if lock[1].isupper():
+                        balance -= 1 if lock[2] in 'x ' else int(lock[2])
+                    else:
+                        balance += 1 if lock[2] == '' else int(lock[2])
+            for val in Catalog.get(state.stock).values():
+                balance += val
+            return balance >= 0
+        elif self.special == '5-4':
             for edge in state.edges:
                 for lock in Catalog.get(edge):
                     if '~' in Catalog.get(lock):
@@ -908,8 +922,8 @@ class LockpickSolver(Solver):
         elif self.special == '12-9':
             if len(state.edge(3)) == 0 or Catalog.get(state.edge(3)[-1])[1][0] != 'C':
                 return False
-            if state.last_move == 5 and Catalog.get(state.edge(3)[-1])[0] != '~':
-                return False
+            #if state.last_move == 5 and Catalog.get(state.edge(3)[-1])[0] != '~':
+            #    return False #Can bypass by peeking
             return True
         elif self.special == '12-10': #14
             if state.last_move == 14 and Catalog.get(prev.edge(14)[0])[0] != 'P':
@@ -928,8 +942,11 @@ class LockpickSolver(Solver):
                 return False
             if stock.get('e', 0) > 12:
                 return False
-            #if 's' in stock and stock['s'] in state.salvage and state.win != 'Salvage':
-            #    return False
+        elif self.special == 'EX-5':
+            if -53 in state.salvage and state.win is not True:
+                return False
+            if stock.get('e', 0) > 12:
+                return False
         elif self.special == 'O-5':
             if stock.get('r', 0) > 5000: return False
             if state.last_move == 4:
@@ -961,8 +978,14 @@ class LockpickSolver(Solver):
             if len(state.edge(state.last_move)) > 0:
                 return False
         return True
-
+    def purge_state_check(self, state, purge_num):
+        if self.special == "omegaE":
+            return len(state.edge(5)) <= 6 - purge_num
+        
 if __name__ == "__main__":
-    test(full=0, print_moves=0, salvages=0) #Time: ~113 sec0
-    #LockpickSolver().solve(p32, salvage=1, verbose=0, debug=0,
-    #                       use_ids=1, use_score=0, optimize_score=0)
+    p = parse('<>P568$|p4P/C-xC/Px|C-4P/C-xP/C-x|P24P/C-x|P2C/Px|PC/Px|P8C/PxP/C-xC/Px|PxP/C-x|C-xC/Px|C-2P/C-x', 11)
+    #test(full=0, print_moves=1, salvages=0) #Time: ~168 sec
+    solver = LockpickSolver()
+    solver.solve(p, salvage=0, verbose=0, debug=0,
+                           use_ids=1, use_score=0, optimize_score=0)
+    print(solver.highest)
