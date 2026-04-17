@@ -1,4 +1,4 @@
-import time, psutil, pickle, math
+import time, psutil, pickle, math, os
 from dataclasses import dataclass
 from collections import deque
 import msvcrt
@@ -86,13 +86,6 @@ class GridState:
         self._grid[y] = self._grid[y].copy()
         self._grid[y][x] = val
         self._write.add(y)
-    def set_and_track(self, x, y, val):
-        if hasattr(self, '_readonly'): raise Exception('State is read only')
-        self._grid[y] = self._grid[y].copy()
-        self._grid[y][x] = val
-        self._temp = self._temp.copy()
-        self._temp[val] = (x, y)
-        self._write.add(y)
     def size(self):
         return len(self._grid[0]), len(self._grid)
     def all_points(self):
@@ -120,15 +113,6 @@ class GridState:
         for y in range(len(self._grid)):
             for x in range(len(self._grid[y])):
                 if self._grid[y][x] == val:
-                    return (x, y)
-    def find_and_track(self, val):
-        if val in self._temp:
-            return self._temp[val]
-        for y in range(len(self._grid)):
-            for x in range(len(self._grid[y])):
-                if self._grid[y][x] == val:
-                    self._temp = self._temp.copy()
-                    self._temp[val] = (x, y)
                     return (x, y)
     def count(self, val):
         total = 0
@@ -178,6 +162,33 @@ class GridState:
         self._temp[var] -= num
     def set_score(self, val):
         self._score = val
+    def move(self, pos, dir):
+        if not hasattr(self, "_moving"):
+            self._moving = {}
+        if pos in self._moving:
+            return self._moving[pos] == dir
+        self._moving[pos] = dir
+        result = Solver.solver.can_move(self, pos, (pos[0] + dir[0], pos[1] + dir[1]), dir, self.get(pos[0], pos[1]), self.get(pos[0] + dir[0], pos[1] + dir[1]))
+        if result is False:
+            self._moving[pos] = None
+        return result
+    def commit_moves(self, clear_char=" "):
+        #pos_chars = {}
+        #dest_chars = {}
+        for pos, dir in self._moving.items():
+            if dir is None: continue
+            #pos_chars[pos] = self.get(pos[0], pos[1])
+            #dest_chars[pos] = self.get(pos[0] + dir[0], pos[1] + dir[1])
+            self.set(pos[0], pos[1], clear_char)
+        for pos, dir in self._moving.items():
+            if dir is None: continue
+            if Solver.solver.do_move(self, pos, (pos[0] + dir[0], pos[1] + dir[1]), dir, self.previous.get(pos[0], pos[1]), self.previous.get(pos[0] + dir[0], pos[1] + dir[1])) is False:
+            #if Solver.solver.do_move(self, pos, (pos[0] + dir[0], pos[1] + dir[1]), dir, pos_chars[pos], dest_chars[pos]) is False:
+                return False
+        del self._moving
+    def cancel_move(self, pos=None):
+        if pos is None: del self._moving
+        else: self._moving.pop(pos)
 
 class Solver:
     def setup(self, puzzle): return puzzle #Override if initial setup is necessary
@@ -186,9 +197,13 @@ class Solver:
     def check_finish(self, state): return False #Must override
     def lower_bound(self, state): return 0 #(Optional) Minimum moves to solve
     def approximate(self, state): return 0 #(Optional) Estimate distance to solution
+    def can_move(self, state, pos, dest, dir, pval, dval): return True #Override, Call state.move as needed
+    def do_move(self, state, pos, dest, dir, pval, dval): #Override if necessary
+        state.set(dest[0], dest[1], pval)
     _red = '\033[91m'; _blue = '\033[94m'; _black = '\033[00m'; _green = '\033[92m'
     solver = None
-    def solve(self, puzzle, debug=0, refine=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, max_ram=95, **kwargs):
+    def solve(self, puzzle, debug=0, refine=0, use_score=0, optimize_score=0, max_depth=0, approximate=0, approx_factor=0, max_ram=95,
+              show_moves=1, write_to_file=0, out_file='solution.txt', **kwargs):
         start_time = time.time()
         Catalog.init()
         Solver.solver = self
@@ -224,7 +239,17 @@ class Solver:
         purge_bound = self.approximate(starting_state)
         next_purge = 500000
         runtime_checks = []
+
+        file = None
+        if write_to_file:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            file = open(os.path.join(base_dir, out_file), 'w')
+            file.close()
+            file = open(os.path.join(base_dir, out_file), 'a')
+
         def finish_solve(state):
+            if file is not None:
+                file.close()
             state._write = {i for i in range(len(state._grid))}
             state.pack()
             elapsed = time.time() - start_time
@@ -239,7 +264,8 @@ class Solver:
                 if use_score:
                     print("Score:", score)
             print(count_iterate, "iterations,", "{:.2f} seconds.".format(elapsed))
-            self.display_solution(moves, names)
+            if show_moves:
+                self.display_solution(moves, names)
             return moves
         def tighten_bound():
             print(Solver._red + "High RAM use, tightening bound..." + Solver._black)
@@ -327,9 +353,14 @@ class Solver:
                             del state._temp
                             return finish_solve(state)
                         next = self.get_next_states(state)
-                        state.repack()
+                        if write_to_file:
+                            moves, names = self.trace_moves(state)
+                            file.write(str(moves[-1]) + '\n')
+                            file.write(' '.join(names) + '\n')
                         for _, s in next.items():
                             s.previous = state
+                            if hasattr(s, "_moving"):
+                                if s.commit_moves() is False: continue
                             if not self.check_valid(s): continue
                             #if runtime_checks and check_runtime(s): continue
                             if optimize_score:
@@ -350,6 +381,7 @@ class Solver:
                                 if score[0] == depth[0]:
                                     depth_size += 1
                                 del s._score
+                        state.repack()
                         if count_iterate % 50000 == 0:
                             memuse = int(psutil.virtual_memory()[2])
                             print(state)
@@ -394,14 +426,16 @@ class Solver:
                     state = state_queue.pop()
                     state.unpack()
                     next = self.get_next_states(state)
-                    state.repack()
                     for _, s in next.items():
                         s.previous = state
+                        if hasattr(s, "_moving"):
+                            if s.commit_moves() is False: continue
                         if not self.check_valid(s): continue
                         #if runtime_checks and check_runtime(s): continue
                         if self.check_finish(s):
                             del state._temp
                             del s._temp
+                            state.repack()
                             return finish_solve(s)
                         if depth + self.lower_bound(s) > max_depth:
                             continue
@@ -411,6 +445,7 @@ class Solver:
                         if len(prev_states) != (prev_states.add(s) or len(prev_states)):
                             next_queue.appendleft(s)
                         del s._score
+                    state.repack()
                     if count_iterate % 50000 == 0:
                         memuse = int(psutil.virtual_memory()[2])
                         print(state)
@@ -467,12 +502,15 @@ class Solver:
             for m in moves[1:]:
                 states = self.get_next_states(new_list[-1])
                 for k,v in states.items():
+                    v.previous = new_list[-1]
+                    if hasattr(v, "_moving"):
+                        v.commit_moves()
                     if v == m:
                         names.append(str(k))
                         new_list.append(v)
                         break
                 else:
-                    print('Tracing moves failed! Check for accidental mutation of state in get_next_states.')
+                    print(Solver._red + 'Tracing moves failed! Check for accidental mutation of state in get_next_states.' + Solver._black)
                     break
             for m in moves:
                 m.repack()
@@ -513,11 +551,14 @@ class Solver:
             finished = self.check_finish(state)
             if finished: moves = {}
             else: moves = self.get_next_states(state)
+            for v in moves.values():
+                v.previous = state
+            moves = {k:v for k,v in moves.items() if not (hasattr(v, "_moving") and v.commit_moves() is False) and self.check_valid(v)}
             state.repack()
             moves = {str(k):v for k,v in moves.items()}
             for v in moves.values():
                 v.pack()
-                v.previous = state
+                #v.previous = state
             if not move_input:
                 print(state)
                 if prev_moves: print('Moves: ' + ' '.join(prev_moves))

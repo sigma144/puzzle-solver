@@ -9,6 +9,7 @@ class AbridgeSolver(Solver):
         state.set_temp('circles', 0)
         sym = False
         self.exits = []
+        self.corrupt = False
         for x, y in state.all_points():
             val = state.get(x, y)
             if val == '#':
@@ -21,6 +22,8 @@ class AbridgeSolver(Solver):
                 state.inc_temp('tiles')
             if val[0] == 'O':
                 state.inc_temp('circles')
+            if 'c' in val:
+                self.corrupt = True
             if 's' in val:
                 sym = True
         if sym and len(self.exits) > 1:
@@ -37,9 +40,9 @@ class AbridgeSolver(Solver):
         if not state.get_temp('click'):
             for p in self.open_tiles:
                 val = state.get(p[0], p[1])
-                if val[0] in ' #X' or move == p:#or state.get_temp('sym') == p:
+                if val[0] in ' #' or move == p:#or state.get_temp('sym') == p:
                     continue
-                if val[-1] == 'c':
+                if self.corrupt:
                     for dirx, diry in DIRECTIONS.values():
                         if state.get(p[0]+dirx, p[1]+diry) != '#':
                             break
@@ -53,7 +56,9 @@ class AbridgeSolver(Solver):
                             if state.get(p[0]+dirx, p[1]+diry) != '#':
                                 count += 1
                                 if count == 2: break
-                        else: return {}
+                        else:
+                            if count == 0 or count == 1 and val[0] != 'Y': return {}
+                if val[0] == 'X': continue
                 new_state = state.copy()
                 new_state.set_var('move', p)
                 new_state.set_score(0)
@@ -107,79 +112,52 @@ class AbridgeSolver(Solver):
         return state.get_temp('tiles') // 2
     def approximate(self, state):
         return state.get_temp('tiles')# + 0 if state.get_temp('circles') else 3
-    def push(self, state, x, y, dx, dy):
-        nextx, nexty = x+dx, y+dy
-        val, nextval = state.get(x, y), state.get(nextx, nexty)
-        if nextval == '#':
+    def can_move(self, state, pos, dest, dir, pval, dval):
+        if dval == '#' or state.get_temp('circles') is None and self.is_trapped(dest[0], dest[1], pval):
             return False
-        if val == '#' or val == '*': #Can't pull wall or exit
-            return self.push(state, nextx, nexty, dx, dy)
-        elif nextval == ' ':
-            if not state.get_temp('circles'):
-                if self.is_trapped(nextx, nexty, val[0]):
+        if pval[-1] == 's' and state.get_var('move') == pos:
+            sym = state.get_temp('sym')
+            if sym is not None:
+                sym_dir = dir if state.get(sym[0], sym[1])[0] == pval[0] else (-dir[0], -dir[1])
+                if pval[0] == 'O' and state.get(sym[0] - sym_dir[0], sym[1] - sym_dir[1]) not in '#* ':
+                    if not state.move((sym[0] - sym_dir[0], sym[1] - sym_dir[1]), sym_dir):
+                        return False
+                if not state.move(sym, sym_dir):
                     return False
-            state.set(nextx, nexty, val)
-            state.set(x, y, ' ')
-            return True
-        elif nextval == '*':
+                state.set_temp('sym', (sym[0] + sym_dir[0], sym[1] + sym_dir[1]))
+        if dval in ' *': return True
+        return state.move(dest, dir)
+    def do_move(self, state, pos, dest, dir, pval, dval):
+        if dval == '*':
+            if pos == state.previous.get_var('move'):
+                state.del_var('move')
+                state.del_temp('sym')
+            if pos == state.previous.get_temp('sym'):
+                state.del_temp('sym')
             state.dec_temp('tiles', 1)
-            if val[0] == 'O':
+            if pval[0] == 'O':
                 state.dec_temp('circles', 1)
                 if state.get_temp('circles') == 0:
-                    state.del_temp('circles')
-                    for px, py in self.open_tiles:
-                        if self.is_trapped(px, py, state.get(px, py)):
-                            return False
-            state.set(x, y, ' ')
-            return True
+                    state.set_temp('circles', -1)
         else:
-            if not self.push(state, nextx, nexty, dx, dy):
-                return False
-            state.set(nextx, nexty, val)
-            state.set(x, y, ' ')
-            return True
+            state.set(dest[0], dest[1], pval)
+        if (pval[-1] == 'c' or len(pval) == 3) and state.get(pos[0], pos[1]) == ' ':
+            moving = state.previous.get_var('move')
+            if state.previous.get(moving[0], moving[1])[0] != 'O':
+                state.set(pos[0], pos[1], '#')
     def copy_and_push(self, state, x, y, dx, dy, circle=False, symcircle=False):
+        pos = (x, y)
+        dir = (dx, dy)
         new_state = state.copy()
         new_state.del_temp('click')
-        val = state.get(x, y)
-        if symcircle and state.get_temp('sym') is not None:
-            sx, sy = state.get_temp('sym')
-            sx -= dx; sy -= dy
-            if dx < 0 and x < sx or dy < 0 and y < sy or dx > 0 and x > sx or dy > 0 and y > sy:
-                x1 = x; x2 = sx; y1 = y; y2 = sy
-            else:
-                x1 = sx; x2 = x; y1 = sy; y2 = y
-            if not self.push(new_state, x1, y1, dx, dy):
-                return None
-            if not (x1-dx == x2 and y1-dy == y2 and new_state.get(x2, y2) in '#*'):
-                if not self.push(new_state, x2, y2, dx, dy):
-                    return None
-            if state.get(sx+dx+dx, sy+dy+dy) == '*':
-                new_state.del_temp('sym')
-            else: new_state.set_temp('sym', (sx+dx+dx, sy+dy+dy))
-        elif not circle and val[-1] == 's' and state.get_temp('sym') is not None:
-            if not self.push(new_state, x, y, dx, dy):
-                return None
-            sx, sy = state.get_temp('sym')
-            sdx = dx; sdy = dy
-            if state.get(sx, sy)[0] != val[0]:
-                sdx = -sdx; sdy = -sdy
-            if (x+dx != sx or y+dy != sy) and state.get(sx, sy) == new_state.get(sx, sy) \
-                and not self.push(new_state, sx, sy, sdx, sdy):
-                return None
-            if state.get(sx+sdx, sy+sdy) == '*':
-                new_state.del_temp('sym')
-            else: new_state.set_temp('sym', (sx+sdx, sy+sdy))
-            if len(state.get(sx, sy)) == 3:
-                new_state.set(sx, sy, '#')
-        elif not self.push(new_state, x, y, dx, dy):
-            return None
+        if circle and new_state.get(x, y) in '#* ':
+            pos = (x + dx, y + dy)
+        result = new_state.move(pos, dir)
+        if result is False: return None
         if circle:
-            new_state.set_var('move', (x+dx+dx, y+dy+dy))
+            new_state.set_var('move', (x + dx + dx, y + dy + dy))
         else:
-            new_state.set_var('move', (x+dx, y+dy))
-            if val[-1] == 'c' or len(val) == 3:
-                new_state.set(x, y, '#')
+            new_state.set_var('move', (x + dx, y + dy))
         return new_state
     def is_trapped(self, x, y, tile):
         if tile == '^' and self.trapsU[y][x] or \
@@ -230,6 +208,11 @@ class AbridgeSolver(Solver):
             self.trapsU[y][x] = not self.can_escape(state, x, y, 0, 1, diagonal)
             self.trapsD[y][x] = not self.can_escape(state, x, y, 0, -1, diagonal)
     def check_valid(self, state):
+        if state.get_temp('circles') == -1:
+            for x, y in self.open_tiles:
+                if self.is_trapped(x, y, state.get(x, y)):
+                    return False
+            state.del_temp('circles')
         return True #Below code is for Doubles puzzle only
         if state.get(3, 5) in '^<' and state.get(1, 5) == ' ' and state.get(2, 5) == ' ': return False
         if state.get(2, 5) == 'v' and state.get(1, 5) == ' ': return False
@@ -274,19 +257,17 @@ puzzle_test = [
 ]
 
 puzzle = from_strs([
-'#########',
-'#   *   #',
-'#XX##X#X#',
-'#       #',
-'#       #',
-'#       #',
-'# FW FW #',
-'# SU SU #',
-'#########',
+'#####',
+'#> Y#',
+'## ##',
+'#OXv#',
+'# XX#',
+'#*^X#',
+'#####',
 ])
 
-AbridgeSolver().solve(puzzle, debug=0, refine=0, use_score=1, optimize_score=1,
-                      approximate=0, approx_factor=4, max_depth=70)
+AbridgeSolver().solve(puzzle_misdirection, debug=0, refine=0, use_score=1, optimize_score=1, write_to_file=0,
+                      approximate=0, approx_factor=4, max_depth=400)
 
 puzzle_blank = from_strs([
 '#######',
